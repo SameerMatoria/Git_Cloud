@@ -8,6 +8,8 @@ const upload = multer();
 require('dotenv').config();
 
 const app = express(); // ✅ FIXED
+const PORT = process.env.PORT || 5000;
+
 
 // ✅ Middleware
 app.use(cors({
@@ -278,21 +280,12 @@ app.get('/api/contents', async (req, res) => {
   }
 });
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+app.get('/apitest',(req,res)=>{
+  console.log('/apitest got hit');
+  res.send("someone just called /apitest");
+})
 
 // ✅ Start the server
-app.listen(5000, () => {
+app.listen(PORT, () => {
   console.log('🚀 Backend running on http://192.168.0.100:5000');
 });
