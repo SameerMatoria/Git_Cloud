@@ -45,7 +45,7 @@ export default function RepoPage() {
     if (!confirmDelete) return;
 
     try {
-      const res = await fetch('http://192.168.0.100:5000/api/delete-file', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/delete-file`, {
         method: 'DELETE',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

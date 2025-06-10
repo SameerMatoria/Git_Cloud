@@ -90,7 +90,7 @@ export default function DashboardPage() {
       <nav className="flex justify-between items-center px-6 py-4 bg-zinc-900 shadow">
         <h1 className="text-xl font-bold">GitCloud Dashboard</h1>
         <button
-          onClick={() => (window.location.href = 'http://192.168.0.100:5000/auth/logout')}
+          onClick={() => (window.location.href = `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/logout`)}
           className="bg-white-600 border-b-2 border-transparent hover:border-white cursor-pointer text-white px-4 py-2 text-sm duration-300"
 
         >
