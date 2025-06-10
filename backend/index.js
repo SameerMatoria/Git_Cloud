@@ -34,7 +34,7 @@ const CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
 
 // ✅ Step 1: GitHub login
 app.get('/auth/github', (req, res) => {
-  const redirect_uri = 'http://192.168.0.100:5000/auth/github/callback';
+  const redirect_uri = process.env.GITHUB_CALLBACK_URL;
   res.redirect(
     `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${redirect_uri}&scope=repo`
   );
