@@ -287,5 +287,5 @@ app.get('/apitest',(req,res)=>{
 
 // ✅ Start the server
 app.listen(PORT, () => {
-  console.log('🚀 Backend running on http://192.168.0.100:5000');
+  console.log('🚀 Backend running on RENDER server');
 });
