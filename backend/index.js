@@ -23,8 +23,13 @@ app.use(cookieParser());
 app.use(session({
   secret: 'gitcloud_secret',
   resave: false,
-  saveUninitialized: false
+  saveUninitialized: false,
+  cookie: {
+    secure: true,          // required on HTTPS
+    sameSite: 'None'       // required for cross-origin cookies
+  }
 }));
+
 
 
 
