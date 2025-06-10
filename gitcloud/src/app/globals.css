@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+/* app/globals.css */
+
+* {
+  font-family: 'Open Sans', sans-serif !important;
+  scroll-behavior: smooth;
+}
+
+ 
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@keyframes gradientShift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
