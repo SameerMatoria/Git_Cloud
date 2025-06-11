@@ -2,8 +2,6 @@
 
 import React, { useEffect, useState } from 'react';
 import api from '@/lib/api';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function DashboardPage() {
