@@ -5,6 +5,8 @@ export default function LoginPage() {
     window.location.href = `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/github`;
   };
 
+  
+
   const handleGoHome = () => {
     window.location.href = 'http://192.168.0.100:3000';
   };
