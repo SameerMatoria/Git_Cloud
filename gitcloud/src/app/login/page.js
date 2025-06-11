@@ -8,7 +8,7 @@ export default function LoginPage() {
   
 
   const handleGoHome = () => {
-    window.location.href = 'https://mygitcloud.vercel.app';
+    window.location.href = 'https://gitcloud-r.onrender.com';
   };
 
   return (
