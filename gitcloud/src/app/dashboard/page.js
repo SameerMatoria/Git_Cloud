@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import { useRouter } from 'next/navigation';
-
+import { useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function DashboardPage() {
   const [user, setUser] = useState(null);
@@ -19,6 +20,20 @@ export default function DashboardPage() {
   const [fileList, setFileList] = useState([]);
 
   const router = useRouter();
+  const params = useSearchParams();
+
+  useEffect(() => {
+    const token = params.get('token');
+    const username = params.get('username');
+
+    if (token) {
+      localStorage.setItem('gitcloud_token', token);
+      localStorage.setItem('gitcloud_username', username);
+
+      // Optional: clean URL after storing token
+      router.replace('/dashboard');
+    }
+  }, [params, router]);
 
   useEffect(() => {
     const fetchUserAndRepos = async () => {

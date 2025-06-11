@@ -1,37 +1,20 @@
 const express = require('express');
-const session = require('express-session');
 const axios = require('axios');
 const cors = require('cors');
-const cookieParser = require('cookie-parser');
 const multer = require('multer');
 const upload = multer();
 require('dotenv').config();
 
-const app = express(); // ✅ FIXED
+const app = express();
 const PORT = process.env.PORT || 5000;
-
 
 // ✅ Middleware
 app.use(cors({
-  origin: 'https://gitcloud-r.onrender.com',
+  origin: 'https://mygitcloud.onrender.com',
   credentials: true
 }));
 
-
 app.use(express.json());
-app.use(cookieParser());
-app.use(session({
-  secret: 'gitcloud_secret',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: true,          // required on HTTPS
-    sameSite: 'None'       // required for cross-origin cookies
-  }
-}));
-
-
-
 
 // 🔐 GitHub OAuth credentials
 const CLIENT_ID = process.env.GITHUB_CLIENT_ID;
@@ -45,23 +28,12 @@ app.get('/auth/github', (req, res) => {
   );
 });
 
-// ✅ Logout route: destroy session and clear cookie
+// ✅ Logout → just clear localStorage on frontend → no server-side logout needed
 app.get('/auth/logout', (req, res) => {
-  req.session.destroy(err => {
-    if (err) {
-      console.error('Logout error:', err);
-      return res.status(500).send('Logout failed');
-    }
-    res.clearCookie('connect.sid'); // Clear the session cookie
-    res.redirect('https://gitcloud-r.onrender.com/login'); // Redirect to login page
-  });
+  res.redirect('https://mygitcloud.onrender.com/login');
 });
 
-
-
-
-
-// ✅ Step 2: GitHub callback
+// ✅ Step 2: GitHub callback → token-based flow
 app.get('/auth/github/callback', async (req, res) => {
   const code = req.query.code;
 
@@ -79,25 +51,31 @@ app.get('/auth/github/callback', async (req, res) => {
     );
 
     const accessToken = tokenRes.data.access_token;
-    req.session.accessToken = accessToken;
 
-    // 🔄 Get user info and store username
     const userRes = await axios.get('https://api.github.com/user', {
       headers: { Authorization: `token ${accessToken}` },
     });
-    req.session.username = userRes.data.login;
+    const username = userRes.data.login;
 
-    console.log('✅ GitHub OAuth Success. User:', userRes.data.login);
-    res.redirect('https://gitcloud-r.onrender.com/dashboard');
+    console.log('✅ GitHub OAuth Success. User:', username);
+
+    // Redirect with token + username in URL
+    res.redirect(`https://mygitcloud.onrender.com/dashboard?token=${accessToken}&username=${username}`);
   } catch (err) {
     console.error('❌ OAuth error:', err.message);
     res.status(500).send('GitHub OAuth failed');
   }
 });
 
+// ✅ Helper to read token from Authorization header
+const getTokenFromHeader = (req) => {
+  const authHeader = req.headers.authorization;
+  return authHeader && authHeader.split(' ')[1];
+};
+
 // ✅ Get user info
 app.get('/api/user', async (req, res) => {
-  const token = req.session.accessToken;
+  const token = getTokenFromHeader(req);
 
   if (!token) {
     return res.status(401).json({ error: 'Not authenticated' });
@@ -117,7 +95,7 @@ app.get('/api/user', async (req, res) => {
 
 // ✅ Get user repositories
 app.get('/api/repos', async (req, res) => {
-  const token = req.session.accessToken;
+  const token = getTokenFromHeader(req);
 
   if (!token) {
     return res.status(401).json({ error: 'Not authenticated' });
@@ -138,7 +116,7 @@ app.get('/api/repos', async (req, res) => {
 
 // ✅ Create a new repo
 app.post('/api/repos', async (req, res) => {
-  const token = req.session.accessToken;
+  const token = getTokenFromHeader(req);
   const { name, description = '', isPrivate = false } = req.body;
 
   if (!token) {
@@ -172,25 +150,24 @@ app.post('/api/repos', async (req, res) => {
   }
 });
 
-
-
 // ✅ Upload a file to a selected repo
 app.post('/api/upload', upload.array('files'), async (req, res) => {
   const files = req.files;
   const { repo, path } = req.body;
-  const accessToken = req.session.accessToken;
-  const username = req.session.username;
+  const token = getTokenFromHeader(req);
+
+  if (!token) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
 
   console.log('🛠 Upload request received');
 
-  // Debug logs
-  console.log('Files:', req.files);
-  console.log('Body:', req.body);
-  if (!files || files.length === 0) {
-    return res.status(400).json({ error: 'No files provided' });
-  }
-
   try {
+    const userRes = await axios.get('https://api.github.com/user', {
+      headers: { Authorization: `token ${token}` },
+    });
+    const username = userRes.data.login;
+
     for (const file of files) {
       const content = file.buffer.toString('base64');
       const uploadPath = path ? `${path}/${file.originalname}` : file.originalname;
@@ -203,7 +180,7 @@ app.post('/api/upload', upload.array('files'), async (req, res) => {
         },
         {
           headers: {
-            Authorization: `Bearer ${accessToken}`,
+            Authorization: `Bearer ${token}`,
             Accept: 'application/vnd.github.v3+json',
           },
         }
@@ -217,25 +194,26 @@ app.post('/api/upload', upload.array('files'), async (req, res) => {
   }
 });
 
-// Delete 
+// ✅ Delete file
 app.delete('/api/delete-file', async (req, res) => {
   const { repo, path, sha } = req.body;
-  const accessToken = req.session.accessToken;
-  const username = req.session.username;
+  const token = getTokenFromHeader(req);
 
-  console.log('➡️ Delete request body:', req.body);
-  console.log('🧠 Session:', { accessToken, username });
-
-  if (!repo || !path || !sha || !accessToken || !username) {
-    return res.status(400).json({ error: 'Missing required fields' });
+  if (!token) {
+    return res.status(401).json({ error: 'Not authenticated' });
   }
 
   try {
+    const userRes = await axios.get('https://api.github.com/user', {
+      headers: { Authorization: `token ${token}` },
+    });
+    const username = userRes.data.login;
+
     const githubRes = await axios.delete(
       `https://api.github.com/repos/${username}/${repo}/contents/${path}`,
       {
         headers: {
-          Authorization: `token ${accessToken}`,
+          Authorization: `token ${token}`,
           Accept: 'application/vnd.github+json',
         },
         data: {
@@ -253,27 +231,28 @@ app.delete('/api/delete-file', async (req, res) => {
   }
 });
 
-
-// =================
-
-// /api/contents?repo=REPO_NAME&path=OPTIONAL_PATH
+// ✅ Get repo contents
 app.get('/api/contents', async (req, res) => {
   const { repo, path = '' } = req.query;
-  const accessToken = req.session.accessToken;  // ✅ FIXED
-  const username = req.session.username;        // ✅ FIXED
+  const token = getTokenFromHeader(req);
 
-  if (!accessToken || !username) {
-    console.error('❌ Missing session username or token');
+  if (!token) {
+    console.error('❌ Missing token');
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
   try {
+    const userRes = await axios.get('https://api.github.com/user', {
+      headers: { Authorization: `token ${token}` },
+    });
+    const username = userRes.data.login;
+
     const githubUrl = `https://api.github.com/repos/${username}/${repo}/contents/${path}`;
     console.log(`📡 Fetching GitHub URL: ${githubUrl}`);
 
     const response = await axios.get(githubUrl, {
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${token}`,
         Accept: 'application/vnd.github.v3+json'
       }
     });
@@ -285,10 +264,11 @@ app.get('/api/contents', async (req, res) => {
   }
 });
 
-app.get('/apitest',(req,res)=>{
+// Test endpoint
+app.get('/apitest', (req, res) => {
   console.log('/apitest got hit');
   res.send("someone just called /apitest");
-})
+});
 
 // ✅ Start the server
 app.listen(PORT, () => {
