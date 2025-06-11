@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 5000;
 
 // ✅ Middleware
 app.use(cors({
-  origin: 'https://mygitcloud.onrender.com',
+  origin: 'https://gitcloud-r.onrender.com',
   credentials: true
 }));
 
@@ -30,7 +30,7 @@ app.get('/auth/github', (req, res) => {
 
 // ✅ Logout → just clear localStorage on frontend → no server-side logout needed
 app.get('/auth/logout', (req, res) => {
-  res.redirect('https://mygitcloud.onrender.com/login');
+  res.redirect('https://gitcloud-r.onrender.com/login');
 });
 
 // ✅ Step 2: GitHub callback → token-based flow
@@ -60,7 +60,7 @@ app.get('/auth/github/callback', async (req, res) => {
     console.log('✅ GitHub OAuth Success. User:', username);
 
     // Redirect with token + username in URL
-    res.redirect(`https://mygitcloud.onrender.com/dashboard?token=${accessToken}&username=${username}`);
+    res.redirect(`https://gitcloud-r.onrender.com/dashboard?token=${accessToken}&username=${username}`);
   } catch (err) {
     console.error('❌ OAuth error:', err.message);
     res.status(500).send('GitHub OAuth failed');
