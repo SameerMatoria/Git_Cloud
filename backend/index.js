@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 5000;
 
 // ✅ Middleware
 app.use(cors({
-  origin: 'https://gc-chi-five.vercel.app',
+  origin: 'https://mygitcloud.vercel.app',
   credentials: true
 }));
 
@@ -53,7 +53,7 @@ app.get('/auth/logout', (req, res) => {
       return res.status(500).send('Logout failed');
     }
     res.clearCookie('connect.sid'); // Clear the session cookie
-    res.redirect('https://gc-chi-five.vercel.app/login'); // Redirect to login page
+    res.redirect('https://mygitcloud.vercel.app/login'); // Redirect to login page
   });
 });
 
@@ -88,7 +88,7 @@ app.get('/auth/github/callback', async (req, res) => {
     req.session.username = userRes.data.login;
 
     console.log('✅ GitHub OAuth Success. User:', userRes.data.login);
-    res.redirect('https://gc-chi-five.vercel.app/dashboard');
+    res.redirect('https://mygitcloud.vercel.app/dashboard');
   } catch (err) {
     console.error('❌ OAuth error:', err.message);
     res.status(500).send('GitHub OAuth failed');
