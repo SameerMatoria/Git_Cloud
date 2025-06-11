@@ -8,7 +8,7 @@ export default function LoginPage() {
   
 
   const handleGoHome = () => {
-    window.location.href = 'http://192.168.0.100:3000';
+    window.location.href = 'https://gc-chi-five.vercel.app/';
   };
 
   return (
