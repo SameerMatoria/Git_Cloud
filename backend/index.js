@@ -53,7 +53,7 @@ app.get('/auth/github/callback', async (req, res) => {
     const accessToken = tokenRes.data.access_token;
 
     const userRes = await axios.get('https://api.github.com/user', {
-      headers: { Authorization: `token ${accessToken}` },
+      headers: { Authorization: `Bearer  ${accessToken}` },
     });
     const username = userRes.data.login;
 
@@ -103,7 +103,7 @@ app.get('/api/repos', async (req, res) => {
 
   try {
     const repoRes = await axios.get('https://api.github.com/user/repos', {
-      headers: { Authorization: `token ${token}` },
+      headers: { Authorization: `Bearer  ${token}` },
       params: { per_page: 100 },
     });
 
@@ -137,7 +137,7 @@ app.post('/api/repos', async (req, res) => {
       },
       {
         headers: {
-          Authorization: `token ${token}`,
+          Authorization: `Bearer  ${token}`,
           Accept: 'application/vnd.github+json',
         },
       }
@@ -164,7 +164,7 @@ app.post('/api/upload', upload.array('files'), async (req, res) => {
 
   try {
     const userRes = await axios.get('https://api.github.com/user', {
-      headers: { Authorization: `token ${token}` },
+      headers: { Authorization: `Bearer  ${token}` },
     });
     const username = userRes.data.login;
 
@@ -205,7 +205,7 @@ app.delete('/api/delete-file', async (req, res) => {
 
   try {
     const userRes = await axios.get('https://api.github.com/user', {
-      headers: { Authorization: `token ${token}` },
+      headers: { Authorization: `Bearer  ${token}` },
     });
     const username = userRes.data.login;
 
@@ -213,7 +213,7 @@ app.delete('/api/delete-file', async (req, res) => {
       `https://api.github.com/repos/${username}/${repo}/contents/${path}`,
       {
         headers: {
-          Authorization: `token ${token}`,
+          Authorization: `Bearer  ${token}`,
           Accept: 'application/vnd.github+json',
         },
         data: {
@@ -243,7 +243,7 @@ app.get('/api/contents', async (req, res) => {
 
   try {
     const userRes = await axios.get('https://api.github.com/user', {
-      headers: { Authorization: `token ${token}` },
+      headers: { Authorization: `Bearer  ${token}` },
     });
     const username = userRes.data.login;
 
