@@ -41,25 +41,38 @@ export default function DashboardPage() {
 
   console.log("USER", user)
 
-  const handleFileUpload = async () => {
-    const formData = new FormData();
-    for (let i = 0; i < fileList.length; i++) {
-      formData.append('files', fileList[i]);  // ✅ Must be 'files'
-    }
+ const handleFileUpload = async () => {
+  const formData = new FormData();
+  for (let i = 0; i < fileList.length; i++) {
+    formData.append('files', fileList[i]);
+  }
 
-    formData.append('repo', selectedRepo);
-    formData.append('path', selectedFilePath || '');
+  formData.append('repo', selectedRepo);
+  formData.append('path', selectedFilePath || '');
 
-    try {
-      const res = await api.post('/api/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      setUploadStatus('✅ Upload complete!');
-    } catch (err) {
-      console.error(err);
-      setUploadStatus('❌ Upload failed');
-    }
-  };
+  try {
+    const res = await api.post('/api/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+
+    setUploadStatus('✅ Upload complete!');
+    
+    // Clear the status after 5 seconds
+    setTimeout(() => {
+      setUploadStatus('');
+    }, 5000);
+
+  } catch (err) {
+    console.error(err);
+    setUploadStatus('❌ Upload failed');
+
+    // Optionally clear the error message too
+    setTimeout(() => {
+      setUploadStatus('');
+    }, 5000);
+  }
+};
+
 
 
   const handleCreateRepo = async () => {
@@ -127,15 +140,19 @@ export default function DashboardPage() {
 
             {/* Flex container for file input and button */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-4 sm:space-y-0 sm:space-x-4 w-full">
-              <input
-                type="file"
-                multiple
-                onChange={(e) => setFileList(e.target.files)}
-                className="text-white hover:underline cursor-pointer w-full sm:w-auto"
-              />
+              <label className="bg-blue-600 text-white px-4 py-2 rounded cursor-pointer hover:bg-blue-700 w-full sm:w-auto inline-block text-center">
+                Upload Files
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) => setFileList(e.target.files)}
+                  className="hidden"
+                />
+              </label>
+
               <button
                 onClick={handleFileUpload}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded w-full sm:w-auto"
+                className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded w-full sm:w-auto cursor-pointer"
               >
                 Upload to GitHub
               </button>
@@ -161,7 +178,7 @@ export default function DashboardPage() {
             />
             <button
               onClick={handleCreateRepo}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded cursor-pointer"
             >
               Create Repo
             </button>
@@ -193,28 +210,30 @@ export default function DashboardPage() {
               {repos.map((repo) => (
                 <li
                   key={repo.id}
-                  className="bg-zinc-900 border border-zinc-700 rounded-lg p-4 shadow-sm"
+                  className="bg-zinc-900 border border-zinc-700 rounded-lg p-4 shadow-sm flex items-center justify-between"
                 >
-                  <a
-                    href={repo.html_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-400 font-semibold hover:underline"
-                  >
-                    {repo.name}
-                  </a>
-                  <p className="text-sm text-zinc-400 mt-1">
-                    {repo.description || 'No description provided.'}
-                  </p>
+                  <div>
+                    <a
+                      href={repo.html_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-400 font-semibold hover:underline"
+                    >
+                      {repo.name}
+                    </a>
+                    <p className="text-sm text-zinc-400 mt-1">
+                      {repo.description || 'No description provided.'}
+                    </p>
+                  </div>
+
                   <button
                     onClick={() => {
                       router.push(`/repo?repo=${repo.name}&username=${user.login}`);
                     }}
-                    className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
+                    className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
                   >
                     View
                   </button>
-
                 </li>
 
               ))}

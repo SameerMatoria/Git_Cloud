@@ -40,6 +40,7 @@ export default function RepoPage() {
     router.push(`/repo?repo=${repo}&path=${item.path}&username=${username}`);
   };
 
+  // del
   const handleDelete = async (file) => {
     const confirmDelete = window.confirm(`Are you sure you want to delete "${file.name}"?`);
     if (!confirmDelete) return;
@@ -65,6 +66,46 @@ export default function RepoPage() {
     }
   };
 
+
+
+  // del all 
+
+  const handleDeleteAll = async () => {
+    const filesOnly = contents.filter(item => item.type !== 'dir');
+
+    if (filesOnly.length === 0) {
+      alert('⚠️ No files to delete.');
+      return;
+    }
+
+    const confirmDelete = window.confirm(`⚠️ Are you sure you want to delete ALL ${filesOnly.length} files in this repo/folder?`);
+    if (!confirmDelete) return;
+
+    for (const file of filesOnly) {
+      try {
+        const res = await fetch('http://192.168.0.100:5000/api/delete-file', {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ repo, path: file.path, sha: file.sha })
+        });
+
+        const result = await res.json();
+        if (!res.ok) {
+          console.error(`Failed to delete ${file.name}:`, result.error);
+        }
+      } catch (err) {
+        console.error(`Network error while deleting ${file.name}:`, err.message);
+      }
+    }
+
+    // Refresh the contents after deletion
+    const updated = await api.get(`/api/contents?repo=${repo}&path=${path}`);
+    setContents(updated.data);
+    alert('✅ All files deleted.');
+  };
+
+
   const getRawUrl = (item) => `https://raw.githubusercontent.com/${username}/${repo}/main/${item.path}`;
 
   const foldersAndOtherFiles = contents.filter(item => item.type === 'dir' || !item.name.match(/\.(jpg|jpeg|png|gif)$/i));
@@ -76,28 +117,67 @@ export default function RepoPage() {
     <div className="min-h-screen bg-black text-white p-6">
       <h1 className="text-2xl font-bold mb-6 border-b border-gray-700 pb-2">
         📁 {repo}/{path}
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={handleDeleteAll}
+            className="bg-red-700 text-white px-4 py-2 rounded hover:bg-red-800 text-sm"
+          >
+            🗑 Delete All Files in Repo
+          </button>
+        </div>
+
       </h1>
 
+
       <div className="space-y-4 mb-8">
-        {foldersAndOtherFiles.map((item) => (
-          <div key={item.sha} className="border border-gray-700 p-4 rounded-lg bg-gray-900">
-            {item.type === 'dir' ? (
-              <button onClick={() => handleFolderClick(item)} className="text-blue-400 hover:underline text-lg">
-                📂 {item.name}
-              </button>
-            ) : (
-              <p className="text-sm text-gray-300">📄 {item.name}</p>
-            )}
-          </div>
-        ))}
+        {foldersAndOtherFiles
+          .filter(
+            (item) =>
+              item.type === 'dir' ||
+              (!item.name.match(/\.(mp3|wav|m4a|ogg|flac)$/i) &&
+                !item.name.match(/\.(mp4|mov|avi|mkv|webm)$/i) &&
+                !item.name.match(/\.(jpg|jpeg|png|gif)$/i)) // Exclude images too
+          )
+          .map((item) => (
+            <div
+              key={item.sha}
+              className="border border-gray-700 p-4 rounded-lg bg-gray-900 flex justify-between items-center"
+            >
+              {item.type === 'dir' ? (
+                <button
+                  onClick={() => handleFolderClick(item)}
+                  className="text-blue-400 hover:underline text-lg"
+                >
+                  📂 {item.name}
+                </button>
+              ) : (
+                <div className="flex-1">
+                  <p className="text-sm text-gray-300 truncate">📄 {item.name}</p>
+                </div>
+              )}
+
+              {item.type !== 'dir' && (
+                <button
+                  onClick={() => handleDelete(item)}
+                  className="bg-red-600 text-white rounded-full px-2 py-1 text-xs hover:bg-red-700 ml-4"
+                >
+                  🗑
+                </button>
+              )}
+            </div>
+          ))}
       </div>
+
 
       {imageFiles.length > 0 && (
         <>
           <h2 className="text-xl mb-4 border-b border-gray-700 pb-2">🖼 Images</h2>
           <div className="flex flex-wrap gap-2">
             {imageFiles.map((item, index) => (
-              <div key={item.sha} className="text-center bg-gray-900 p-2 rounded-lg border border-gray-700">
+              <div
+                key={item.sha}
+                className="text-center bg-gray-900 p-2 rounded-lg border border-gray-700"
+              >
                 <div className="relative">
                   <img
                     src={getRawUrl(item)}
@@ -123,16 +203,26 @@ export default function RepoPage() {
           <h2 className="text-xl mt-8 mb-4 border-b border-gray-700 pb-2">🎵 Audio Files</h2>
           <div className="space-y-4">
             {audioFiles.map((item) => (
-              <div key={item.sha} className="bg-gray-900 p-4 rounded-lg border border-gray-700">
+              <div
+                key={item.sha}
+                className="bg-gray-900 p-4 rounded-lg border border-gray-700 relative"
+              >
                 <p className="text-sm text-gray-300 mb-2">🎧 {item.name}</p>
                 <audio controls src={getRawUrl(item)} className="w-full">
                   Your browser does not support the audio element.
                 </audio>
+                <button
+                  onClick={() => handleDelete(item)}
+                  className="absolute top-2 right-2 bg-red-600 text-white rounded-full px-2 py-1 text-xs hover:bg-red-700"
+                >
+                  🗑
+                </button>
               </div>
             ))}
           </div>
         </>
       )}
+
 
       {videoFiles.length > 0 && (
         <>
@@ -141,21 +231,38 @@ export default function RepoPage() {
             {videoFiles.map((item) => {
               const isActive = selectedVideo === item.path;
               return (
-                <div key={item.sha} className="bg-gray-900 p-4 rounded-lg border border-gray-700">
-                  <button onClick={() => setSelectedVideo(isActive ? null : item.path)} className="text-blue-400 hover:underline text-sm">
+                <div
+                  key={item.sha}
+                  className="bg-gray-900 p-4 rounded-lg border border-gray-700 relative"
+                >
+                  <button
+                    onClick={() => setSelectedVideo(isActive ? null : item.path)}
+                    className="text-blue-400 hover:underline text-sm"
+                  >
                     🎥 {item.name}
                   </button>
                   {isActive && (
-                    <video controls src={getRawUrl(item)} className="w-full mt-2 max-h-[500px] rounded">
+                    <video
+                      controls
+                      src={getRawUrl(item)}
+                      className="w-full mt-2 max-h-[500px] rounded"
+                    >
                       Your browser does not support the video tag.
                     </video>
                   )}
+                  <button
+                    onClick={() => handleDelete(item)}
+                    className="absolute top-2 right-2 bg-red-600 text-white rounded-full px-2 py-1 text-xs hover:bg-red-700"
+                  >
+                    🗑
+                  </button>
                 </div>
               );
             })}
           </div>
         </>
       )}
+
 
       {selectedImageIndex !== null && (
         <div
@@ -172,7 +279,9 @@ export default function RepoPage() {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                setSelectedImageIndex((prev) => (prev - 1 + imageFiles.length) % imageFiles.length);
+                setSelectedImageIndex(
+                  (prev) => (prev - 1 + imageFiles.length) % imageFiles.length
+                );
               }}
               className="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-600"
             >
@@ -191,5 +300,6 @@ export default function RepoPage() {
         </div>
       )}
     </div>
+
   );
 }
