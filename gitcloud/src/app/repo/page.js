@@ -41,29 +41,34 @@ export default function RepoPage() {
   };
 
   const handleDelete = async (file) => {
-    const confirmDelete = window.confirm(`Are you sure you want to delete "${file.name}"?`);
-    if (!confirmDelete) return;
+  const confirmDelete = window.confirm(`Are you sure you want to delete "${file.name}"?`);
+  if (!confirmDelete) return;
 
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/delete-file`, {
-        method: 'DELETE',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repo, path: file.path, sha: file.sha })
-      });
+  const token = localStorage.getItem('gitcloud_token'); // Get token
 
-      const result = await res.json();
-      if (res.ok) {
-        alert('✅ File deleted!');
-        const updated = await api.get(`/api/contents?repo=${repo}&path=${path}`);
-        setContents(updated.data);
-      } else {
-        alert(`❌ Failed to delete: ${result.error?.message || result.error}`);
-      }
-    } catch (err) {
-      alert(`❌ Network error: ${err.message}`);
+  try {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/delete-file`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `token ${token}`, // 🔐 Required for GitHub API access
+      },
+      body: JSON.stringify({ repo, path: file.path, sha: file.sha }),
+    });
+
+    const result = await res.json();
+    if (res.ok) {
+      alert('✅ File deleted!');
+      const updated = await api.get(`/api/contents?repo=${repo}&path=${path}`);
+      setContents(updated.data);
+    } else {
+      alert(`❌ Failed to delete: ${result.error?.message || result.error}`);
     }
-  };
+  } catch (err) {
+    alert(`❌ Network error: ${err.message}`);
+  }
+};
+
 
   const getRawUrl = (item) => `https://raw.githubusercontent.com/${username}/${repo}/main/${item.path}`;
 
