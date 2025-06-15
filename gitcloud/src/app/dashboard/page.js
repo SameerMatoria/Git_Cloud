@@ -57,7 +57,7 @@ export default function DashboardPage() {
   const handleFileUpload = async () => {
     const formData = new FormData();
     for (let i = 0; i < fileList.length; i++) {
-      formData.append('files', fileList[i]);  // ✅ Must be 'files'
+      formData.append('files', fileList[i]);
     }
 
     formData.append('repo', selectedRepo);
@@ -67,13 +67,20 @@ export default function DashboardPage() {
       const res = await api.post('/api/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+
       setUploadStatus('✅ Upload complete!');
+
+      // Clear the status after 5 seconds
+      setTimeout(() => {
+        setUploadStatus('');
+      }, 5000);
+
     } catch (err) {
       console.error(err);
       setUploadStatus('❌ Upload failed');
+
     }
   };
-
 
   const handleCreateRepo = async () => {
     if (!newRepoName) return;
