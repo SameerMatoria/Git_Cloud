@@ -140,30 +140,29 @@ export default function DashboardPage() {
 
             {/* Flex container for file input and button */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-4 sm:space-y-0 sm:space-x-4 w-full">
-              <div className="w-full sm:w-auto">
-                <label className="bg-blue-600 text-white px-4 py-2 rounded cursor-pointer hover:bg-blue-700 w-full sm:w-auto inline-block text-center">
-                  Upload Files
-                  <input
-                    type="file"
-                    multiple
-                    onChange={(e) => setFileList(Array.from(e.target.files))}
-                    className="hidden"
-                  />
-                </label>
-                <p className="text-sm text-gray-600 mt-2 text-center sm:text-left">
-                  {fileList.length > 0
-                    ? `${fileList.length} file(s) selected`
-                    : 'No files selected'}
-                </p>
-              </div>
+  <div className="flex flex-col w-full sm:w-auto">
+    <label className="bg-blue-600 text-white px-4 py-2 rounded cursor-pointer hover:bg-blue-700 w-full sm:w-auto inline-block text-center">
+      Upload Files
+      <input
+        type="file"
+        multiple
+        onChange={(e) => setFileList(Array.from(e.target.files))}
+        className="hidden"
+      />
+    </label>
+    <span className="text-sm text-gray-400 mt-1 text-center sm:text-left">
+      {fileList.length > 0 ? `${fileList.length} file(s) selected` : ''}
+    </span>
+  </div>
 
-              <button
-                onClick={handleFileUpload}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded w-full sm:w-auto"
-              >
-                Upload to GitHub
-              </button>
-            </div>
+  <button
+    onClick={handleFileUpload}
+    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded w-full sm:w-auto"
+  >
+    Upload to GitHub
+  </button>
+</div>
+
 
             {uploadStatus && <p className="text-sm text-zinc-400">{uploadStatus}</p>}
           </div>
