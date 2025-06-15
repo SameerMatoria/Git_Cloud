@@ -140,12 +140,15 @@ export default function DashboardPage() {
 
             {/* Flex container for file input and button */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-4 sm:space-y-0 sm:space-x-4 w-full">
-              <input
-                type="file"
-                multiple
-                onChange={(e) => setFileList(e.target.files)}
-                className="text-white hover:underline cursor-pointer w-full sm:w-auto"
-              />
+             <label className="bg-blue-600 text-white px-4 py-2 rounded cursor-pointer hover:bg-blue-700 w-full sm:w-auto inline-block text-center">
+                Upload Files
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) => setFileList(e.target.files)}
+                  className="hidden"
+                />
+              </label>
               <button
                 onClick={handleFileUpload}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded w-full sm:w-auto"
@@ -206,28 +209,30 @@ export default function DashboardPage() {
               {repos.map((repo) => (
                 <li
                   key={repo.id}
-                  className="bg-zinc-900 border border-zinc-700 rounded-lg p-4 shadow-sm"
+                  className="bg-zinc-900 border border-zinc-700 rounded-lg p-4 shadow-sm flex items-center justify-between"
                 >
-                  <a
-                    href={repo.html_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-400 font-semibold hover:underline"
-                  >
-                    {repo.name}
-                  </a>
-                  <p className="text-sm text-zinc-400 mt-1">
-                    {repo.description || 'No description provided.'}
-                  </p>
+                  <div>
+                    <a
+                      href={repo.html_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-400 font-semibold hover:underline"
+                    >
+                      {repo.name}
+                    </a>
+                    <p className="text-sm text-zinc-400 mt-1">
+                      {repo.description || 'No description provided.'}
+                    </p>
+                  </div>
+
                   <button
                     onClick={() => {
                       router.push(`/repo?repo=${repo.name}&username=${user.login}`);
                     }}
-                    className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
+                    className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
                   >
                     View
                   </button>
-
                 </li>
 
               ))}
