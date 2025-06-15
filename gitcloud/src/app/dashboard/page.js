@@ -139,10 +139,18 @@ export default function DashboardPage() {
             </select>
 
             {/* Flex container for file input and button */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-4 sm:space-y-0 sm:space-x-4 w-full">
-              <div className="w-full sm:w-auto relative">
-                <label className="bg-blue-600 text-white px-4 py-2 rounded cursor-pointer hover:bg-blue-700 w-full sm:w-auto inline-block text-center">
-                  Upload Files
+            <div className="w-full flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-2 sm:space-y-0">
+              {/* Upload Files button with file count below */}
+              {/* Upload to GitHub button */}
+              <button
+                onClick={handleFileUpload}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded w-full sm:w-auto"
+              >
+                Upload to GitHub
+              </button>
+              <div className="flex flex-col items-center sm:items-start">
+                <label className="bg-blue-600 text-white px-4 py-2 rounded cursor-pointer hover:bg-blue-700 w-full sm:w-auto text-center">
+                  Select Files
                   <input
                     type="file"
                     multiple
@@ -150,19 +158,13 @@ export default function DashboardPage() {
                     className="hidden"
                   />
                 </label>
-                <div className="absolute left-0 top-full mt-1 w-full text-sm text-gray-400 text-center sm:text-left">
-                  {fileList.length > 0 ? `${fileList.length} file(s) selected` : ''}
-                </div>
+
               </div>
+              <span className="text-sm text-center text-gray-400 mt-2">
+                {fileList.length > 0 ? `${fileList.length} file(s) selected` : ''}
+              </span>
 
-              <button
-                onClick={handleFileUpload}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded w-full sm:w-auto"
-              >
-                Upload to GitHub
-              </button>
             </div>
-
 
 
             {uploadStatus && <p className="text-sm text-zinc-400">{uploadStatus}</p>}
