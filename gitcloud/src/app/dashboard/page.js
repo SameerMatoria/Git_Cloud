@@ -2,8 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import api from '@/lib/api';
-import { useRouter } from 'next/navigation';
-
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function DashboardPage() {
   const [user, setUser] = useState(null);
@@ -19,6 +18,20 @@ export default function DashboardPage() {
   const [fileList, setFileList] = useState([]);
 
   const router = useRouter();
+  const params = useSearchParams();
+
+  useEffect(() => {
+    const token = params.get('token');
+    const username = params.get('username');
+
+    if (token) {
+      localStorage.setItem('gitcloud_token', token);
+      localStorage.setItem('gitcloud_username', username);
+
+      // Optional: clean URL after storing token
+      router.replace('/dashboard');
+    }
+  }, [params, router]);
 
   useEffect(() => {
     const fetchUserAndRepos = async () => {
@@ -59,21 +72,15 @@ export default function DashboardPage() {
 
       // Clear the status after 5 seconds
       setTimeout(() => {
-        setUploadStatus('');
+        setUploadStatus('' );
       }, 5000);
 
     } catch (err) {
       console.error(err);
       setUploadStatus('❌ Upload failed');
 
-      // Optionally clear the error message too
-      setTimeout(() => {
-        setUploadStatus('');
-      }, 5000);
     }
   };
-
-
 
   const handleCreateRepo = async () => {
     if (!newRepoName) return;
@@ -103,7 +110,7 @@ export default function DashboardPage() {
       <nav className="flex justify-between items-center px-6 py-4 bg-zinc-900 shadow">
         <h1 className="text-xl font-bold">GitCloud Dashboard</h1>
         <button
-          onClick={() => (window.location.href = 'http://192.168.0.100:5000/auth/logout')}
+          onClick={() => (window.location.href = `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/logout`)}
           className="bg-white-600 border-b-2 border-transparent hover:border-white cursor-pointer text-white px-4 py-2 text-sm duration-300"
 
         >
@@ -122,58 +129,65 @@ export default function DashboardPage() {
         {/* )}  */}
 
         {/* File upload */}
-        <div className="bg-zinc-900 p-6 rounded-xl shadow mb-10">
-          <h2 className="text-2xl font-semibold mb-4">📤 Upload File to Repository</h2>
-          <div className="space-y-4">
-            <select
-              className="w-full bg-zinc-800 text-white border border-zinc-700 rounded px-4 py-2"
-              value={selectedRepo}
-              onChange={(e) => setSelectedRepo(e.target.value)}
-            >
-              <option value="">-- Select a repository --</option>
-              {repos.map((repo) => (
-                <option key={repo.id} value={repo.name}>
-                  {repo.name}
-                </option>
-              ))}
-            </select>
+       <div className="bg-zinc-900 p-6 rounded-xl shadow mb-10">
+  <h2 className="text-2xl font-semibold mb-4">📤 Upload File to Repository</h2>
+  <div className="space-y-4">
+    {/* Repository Selection */}
+    <select
+      className="w-full bg-zinc-800 text-white border border-zinc-700 rounded px-4 py-2"
+      value={selectedRepo}
+      onChange={(e) => {
+        setSelectedRepo(e.target.value);
+        setFileList([]); // Optional: reset file list when repo changes
+      }}
+    >
+      <option value="">-- Select a repository --</option>
+      {repos.map((repo) => (
+        <option key={repo.id} value={repo.name}>
+          {repo.name}
+        </option>
+      ))}
+    </select>
 
-            {/* Flex container for file input and button */}
-            <div className="w-full flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-2 sm:space-y-0">
-              {/* Upload Files button with file count below */}
-              {/* Upload to GitHub button */}
-              <button
-                onClick={handleFileUpload}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded w-full sm:w-auto"
-              >
-                Upload to GitHub
-              </button>
-              <div className="flex flex-col items-center sm:items-start">
-                <label className="bg-blue-600 text-white px-4 py-2 rounded cursor-pointer hover:bg-blue-700 w-full sm:w-auto text-center">
-                  Select Files
-                  <input
-                    type="file"
-                    multiple
-                    onChange={(e) => setFileList(Array.from(e.target.files))}
-                    className="hidden"
-                  />
-                </label>
-
-              </div>
-              <span className="text-sm text-center text-gray-400 mt-2">
-                {fileList.length > 0 ? `${fileList.length} file(s) selected` : ''}
-              </span>
-
-            </div>
-
-
-
-
-            {uploadStatus && <p className="text-sm text-zinc-400">{uploadStatus}</p>}
-          </div>
-
-
+    {/* Show Select Files button only if repo is selected */}
+    {selectedRepo && (
+      <div className="w-full flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-2 sm:space-y-0">
+        <div className="flex flex-col items-center sm:items-start">
+          <label className="bg-blue-600 text-white px-4 py-2 rounded cursor-pointer hover:bg-blue-700 w-full sm:w-auto text-center">
+            Select Files
+            <input
+              type="file"
+              multiple
+              onChange={(e) => setFileList(Array.from(e.target.files))}
+              className="hidden"
+            />
+          </label>
         </div>
+
+        {/* Show Upload button only if files are selected */}
+        {fileList.length > 0 && (
+          <button
+            onClick={handleFileUpload}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded w-full sm:w-auto"
+          >
+            Upload to GitHub
+          </button>
+        )}
+      </div>
+    )}
+
+    {/* File Count Status */}
+    {selectedRepo && fileList.length > 0 && (
+      <span className="text-sm text-center text-gray-400 mt-2">
+        {fileList.length} file(s) selected
+      </span>
+    )}
+
+    {/* Upload Status Message */}
+    {uploadStatus && <p className="text-sm text-zinc-400">{uploadStatus}</p>}
+  </div>
+</div>
+
 
         {/* Create Repo */}
         <div className="bg-zinc-900 p-6 rounded-xl shadow mb-10">
@@ -188,7 +202,7 @@ export default function DashboardPage() {
             />
             <button
               onClick={handleCreateRepo}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded cursor-pointer"
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
             >
               Create Repo
             </button>
