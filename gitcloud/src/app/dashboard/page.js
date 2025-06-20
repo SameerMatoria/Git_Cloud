@@ -130,65 +130,51 @@ export default function DashboardPage() {
 
         {/* File upload */}
         <div className="bg-zinc-900 p-6 rounded-xl shadow mb-10">
-  <h2 className="text-2xl font-semibold mb-4">📤 Upload File to Repository</h2>
-  <div className="space-y-4">
-    {/* Repository Selection */}
-    <select
-      className="w-full bg-zinc-800 text-white border border-zinc-700 rounded px-4 py-2"
-      value={selectedRepo}
-      onChange={(e) => {
-        setSelectedRepo(e.target.value);
-        setFileList([]); // Optional: reset file list when repo changes
-      }}
-    >
-      <option value="">-- Select a repository --</option>
-      {repos.map((repo) => (
-        <option key={repo.id} value={repo.name}>
-          {repo.name}
-        </option>
-      ))}
-    </select>
+          <h2 className="text-2xl font-semibold mb-4">📤 Upload File to Repository</h2>
+          <div className="space-y-4">
+            {/* Repository Selection */}
+            <select
+              className="w-full bg-zinc-800 text-white border border-zinc-700 rounded px-4 py-2"
+              value={selectedRepo}
+              onChange={(e) => {
+                setSelectedRepo(e.target.value);
+                setFileList([]); // Optional: reset file list when repo changes
+              }}
+            >
+              <option value="">-- Select a repository --</option>
+              {repos.map((repo) => (
+                <option key={repo.id} value={repo.name}>
+                  {repo.name}
+                </option>
+              ))}
+            </select>
 
-    {/* Show Select Files button only if repo is selected */}
-    {selectedRepo && (
-      <div className="w-full flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-2 sm:space-y-0">
-        <div className="flex flex-col items-center sm:items-start">
-          <label className="bg-blue-600 text-white px-4 py-2 rounded cursor-pointer hover:bg-blue-700 w-full sm:w-auto text-center">
-            Select Files
-            <input
-              type="file"
-              multiple
-              onChange={(e) => setFileList(Array.from(e.target.files))}
-              className="hidden"
-            />
-          </label>
-        </div>
+            {/* Show Select Files button only if repo is selected */}
+            {selectedRepo && (
+              <div className="w-full flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-2 sm:space-y-0">
+                <div className="flex flex-col items-center sm:items-start">
+                  <label className="bg-blue-600 text-white px-4 py-2 rounded cursor-pointer hover:bg-blue-700 w-full sm:w-auto text-center">
+                    Select Files
+                    <input
+                      type="file"
+                      multiple
+                      onChange={(e) => setFileList(Array.from(e.target.files))}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
 
-        {/* Show Upload button only if files are selected */}
-        {fileList.length > 0 && (
-          <button
-            onClick={handleFileUpload}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded w-full sm:w-auto"
-          >
-            Upload to GitHub
-          </button>
-        )}
-      </div>
-    )}
-
-    {/* File Count Status */}
-    {selectedRepo && fileList.length > 0 && (
-      <span className="text-sm text-center text-gray-400 mt-2">
-        {fileList.length} file(s) selected
-      </span>
-    )}
-
-    {/* Upload Status Message */}
-    {uploadStatus && <p className="text-sm text-zinc-400">{uploadStatus}</p>}
-  </div>
-</div>
-
-
+                {/* Show Upload button only if files are selected */}
+                {fileList.length > 0 && (
+                  <button
+                    onClick={handleFileUpload}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded w-full sm:w-auto"
+                  >
+                    Upload to GitHub
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* File Count Status */}
             {selectedRepo && fileList.length > 0 && (
@@ -201,6 +187,7 @@ export default function DashboardPage() {
             {uploadStatus && <p className="text-sm text-zinc-400">{uploadStatus}</p>}
           </div>
         </div>
+
 
 
         {/* Create Repo */}
