@@ -219,7 +219,7 @@ export default function DashboardPage() {
             className="w-24 h-24 rounded-full border-4 border-zinc-600 shadow"
           />
           <div>
-            <h1 className="text-3xl font-semibold">{user.name || user.login}</h1>
+            <h1 className="text-2xl font-semibold">{user.name || user.login}</h1>
             <p className="text-zinc-400 text-sm">@{user.login}</p>
             {user.bio && <p className="text-zinc-500 text-sm italic mt-2">“{user.bio}”</p>}
           </div>
