@@ -3,12 +3,14 @@
 import React from 'react';
 import './globals.css';
 import { useState } from "react";
+import Background from '@/components/Background';
 
 export default function HomePage() {
   const [menuOpen, setMenuOpen] = useState(false);
   return (
 
     <div className="bg-black text-white scroll-smooth">
+       <Background/>
       {/* Navbar */}
       <nav className="fixed top-0 left-0 w-full z-50 px-6 py-4 border-b border-gray-800 bg-black bg-opacity-80 backdrop-blur-md flex justify-between items-center">
         <h1 className="text-xl font-bold tracking-wide text-white">🌩️ GitCloud</h1>
