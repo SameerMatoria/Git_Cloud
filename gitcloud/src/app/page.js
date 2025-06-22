@@ -10,7 +10,7 @@ export default function HomePage() {
   return (
 
     <div className="bg-black text-white scroll-smooth">
-       <Background/>
+      <Background />
       {/* Navbar */}
       <nav className="fixed top-0 left-0 w-full z-50 px-6 py-4 border-b border-gray-800 bg-black bg-opacity-80 backdrop-blur-md flex justify-between items-center">
         <h1 className="text-xl font-bold tracking-wide text-white">🌩️ GitCloud</h1>
@@ -54,9 +54,16 @@ export default function HomePage() {
 
 
       <section
-        id="features"
-        className="h-screen bg-gradient-to-br from-blue-700 via-purple-800 to-black px-4 md:px-8 py-20 flex items-center justify-center"
+        id="start"
+        className="relative h-screen bg-gradient-to-br from-blue-700 via-purple-800 to-black px-8 py-20 flex flex-col justify-center items-center text-center overflow-hidden"
       >
+        {/* Top Fade (More Faded) */}
+        <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-black via-black/70 to-transparent pointer-events-none z-10" />
+
+        {/* Bottom Fade (More Faded) */}
+        <div className="absolute bottom-0 left-0 w-full h-64 bg-gradient-to-t from-black via-black/70 to-transparent pointer-events-none z-10" />
+
+
         <div className="max-w-7xl w-full flex flex-col justify-center">
           <h3 className="text-4xl font-bold text-center mb-10 text-white">Features</h3>
           {/* Horizontal scroll with fade effect */}
@@ -110,7 +117,7 @@ export default function HomePage() {
 
 
       {/* How It Works */}
-      <section id="how-it-works" className="h-screen px-8 py-20 flex items-center justify-center bg-black border-t border-gray-800">
+      <section id="how-it-works" className="h-screen px-8 py-20 flex items-center justify-center bg-black  border-gray-800">
         <div className="max-w-4xl text-center">
           <h3 className="text-3xl font-bold mb-8">🔧 How It Works</h3>
           <ul className="space-y-6 text-gray-400 text-lg">
@@ -123,7 +130,16 @@ export default function HomePage() {
       </section>
 
       {/* CTA Section */}
-      <section id="start" className="h-screen bg-gradient-to-br from-blue-700 via-purple-800 to-black px-8 py-20 flex flex-col justify-center items-center text-center">
+      <section
+        id="start"
+        className="relative h-screen bg-gradient-to-br from-blue-700 via-purple-800 to-black px-8 py-20 flex flex-col justify-center items-center text-center overflow-hidden"
+      >
+        {/* Top Fade (More Faded) */}
+        <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-black via-black/70 to-transparent pointer-events-none z-10" />
+
+        {/* Bottom Fade (More Faded) */}
+        <div className="absolute bottom-0 left-0 w-full h-64 bg-gradient-to-t from-black via-black/70 to-transparent pointer-events-none z-10" />
+
         <h2 className="text-4xl font-bold mb-4">Ready to Git Cloud?</h2>
         <p className="text-gray-200 max-w-xl mb-6">
           Join the developers managing their GitHub like Google Drive. Experience GitCloud.
@@ -137,7 +153,7 @@ export default function HomePage() {
       <footer className="bg-black border-t border-gray-800 px-6 py-6 text-center text-gray-500 text-sm">
         <div className="mb-2">© {new Date().getFullYear()} GitCloud. Powered by the GitHub API.</div>
         <div className="space-x-4">
-          <a href="https://github.com" target="https://github.com/SameerMatoria" className="hover:text-white">GitHub</a>
+          <a href="https://github.com/SameerMatoria" target="_blank" className="hover:text-white">GitHub</a>
         </div>
       </footer>
     </div>
