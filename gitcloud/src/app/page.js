@@ -58,7 +58,7 @@ export default function HomePage() {
         className="h-screen bg-gradient-to-br from-blue-700 via-purple-800 to-black px-4 md:px-8 py-20 flex items-center justify-center"
       >
         <div className="max-w-7xl w-full flex flex-col justify-center">
-          <h3 className="text-4xl font-bold text-center mb-10 text-white">✨ Features</h3>
+          <h3 className="text-4xl font-bold text-center mb-10 text-white">Features</h3>
           {/* Horizontal scroll with fade effect */}
           <div className="relative">
             <div
@@ -72,7 +72,7 @@ export default function HomePage() {
               <div
                 className="bg-black bg-opacity-40 p-6 aspect-square rounded-2xl border border-gray-700 shadow-xl hover:scale-105 transition-transform flex flex-col justify-center items-center flex-shrink-0 w-[70%] sm:w-[50%] md:w-auto snap-center mx-2 md:mx-0"
               >
-                <h4 className="text-2xl font-semibold mb-4 text-white text-center">📁 Browse Repos</h4>
+                <h4 className="text-2xl font-semibold mb-4 text-white text-center">Browse Repos</h4>
                 <p className="text-gray-300 text-base leading-relaxed text-center">
                   List all your GitHub repositories and navigate through folders just like a traditional cloud drive.
                 </p>
@@ -82,7 +82,7 @@ export default function HomePage() {
               <div
                 className="bg-black bg-opacity-40 p-6 aspect-square rounded-2xl border border-gray-700 shadow-xl hover:scale-105 transition-transform flex flex-col justify-center items-center flex-shrink-0 w-[70%] sm:w-[50%] md:w-auto snap-center mx-2 md:mx-0"
               >
-                <h4 className="text-2xl font-semibold mb-4 text-white text-center">🖼 Preview Media</h4>
+                <h4 className="text-2xl font-semibold mb-4 text-white text-center">Preview Media</h4>
                 <p className="text-gray-300 text-base leading-relaxed text-center">
                   Instantly preview images, videos, and audio files stored in your GitHub repo with fullscreen options.
                 </p>
@@ -92,7 +92,7 @@ export default function HomePage() {
               <div
                 className="bg-black bg-opacity-40 p-6 aspect-square rounded-2xl border border-gray-700 shadow-xl hover:scale-105 transition-transform flex flex-col justify-center items-center flex-shrink-0 w-[70%] sm:w-[50%] md:w-auto snap-center mx-2 md:mx-0"
               >
-                <h4 className="text-2xl font-semibold mb-4 text-white text-center">☁️ Upload with Ease</h4>
+                <h4 className="text-2xl font-semibold mb-4 text-white text-center">Upload with Ease</h4>
                 <p className="text-gray-300 text-base leading-relaxed text-center">
                   Upload files to your GitHub repo directly using an intuitive UI. Auto-commits handled under the hood.
                 </p>
@@ -135,11 +135,9 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="bg-black border-t border-gray-800 px-6 py-6 text-center text-gray-500 text-sm">
-        <div className="mb-2">© {new Date().getFullYear()} GitCloud. Built with ❤️ on GitHub API.</div>
+        <div className="mb-2">© {new Date().getFullYear()} GitCloud. Powered by the GitHub API.</div>
         <div className="space-x-4">
-          <a href="https://github.com" target="_blank" className="hover:text-white">GitHub</a>
-          <a href="https://twitter.com" target="_blank" className="hover:text-white">Twitter</a>
-          <a href="mailto:support@gitcloud.com" className="hover:text-white">Contact</a>
+          <a href="https://github.com" target="https://github.com/SameerMatoria" className="hover:text-white">GitHub</a>
         </div>
       </footer>
     </div>
