@@ -30,7 +30,7 @@ GitCloud is a web application that transforms your GitHub repositories into a pe
 
 ## Local Setup Guide
 
-### 1. Clone the Repository
+### Clone the Repository
 ⚠️ Important: Make sure to clone the Localhost branch, not the default main branch.
 
 ```bash
@@ -50,7 +50,7 @@ Make sure your Authorization Callback URL is:
 ```bash
 http://localhost:3000/api/auth/github/callback
 ```
-### Install Dependencies
+## Install Dependencies
 Frontend
 ```bash
 cd .\gitcloud\
@@ -62,7 +62,7 @@ cd .\backend\
 npm install
 ```
 
-## Open in Browser
+### Open in Browser
 Go to: http://localhost:3000
 
 ## Notes
@@ -72,7 +72,7 @@ Only authenticated users can access file operations.
 
 Tested on modern browsers and responsive for mobile devices.
 
-### Contributing
+## Contributing
 Feel free to fork this repo and submit a pull request. Let's build GitCloud together!
 
 
