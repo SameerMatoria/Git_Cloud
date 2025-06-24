@@ -31,6 +31,7 @@ GitCloud is a web application that transforms your GitHub repositories into a pe
 ## Local Setup Guide
 
 ### 1. Clone the Repository
+⚠️ Important: Make sure to clone the Localhost branch, not the default main branch.
 
 ```bash
 git clone https://github.com/your-username/gitcloud.git
