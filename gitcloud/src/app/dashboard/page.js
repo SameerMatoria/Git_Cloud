@@ -14,6 +14,7 @@ export default function DashboardPage() {
   const [file, setFile] = useState(null);
   const [uploadStatus, setUploadStatus] = useState('');
   const [selectedFilePath, setSelectedFilePath] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
 
   const [fileList, setFileList] = useState([]);
 
@@ -64,23 +65,26 @@ export default function DashboardPage() {
     formData.append('path', selectedFilePath || '');
 
     try {
+      setIsUploading(true); // <-- Start loading
+      setUploadStatus('Uploading...'); // Optional visual cue
+
       const res = await api.post('/api/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
       setUploadStatus('✅ Upload complete!');
-
-      // Clear the status after 5 seconds
-      setTimeout(() => {
-        setUploadStatus('');
-      }, 5000);
-
+      setFileList([]); // Optional: clear files
     } catch (err) {
       console.error(err);
       setUploadStatus('❌ Upload failed');
-
+    } finally {
+      setIsUploading(false); // <-- End loading
+      setTimeout(() => {
+        setUploadStatus('');
+      }, 5000);
     }
   };
+
 
   const handleCreateRepo = async () => {
     if (!newRepoName) return;
@@ -168,10 +172,13 @@ export default function DashboardPage() {
                 {fileList.length > 0 && (
                   <button
                     onClick={handleFileUpload}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded w-full sm:w-auto"
+                    disabled={isUploading}
+                    className={`bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded w-full sm:w-auto ${isUploading ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                   >
-                    Upload to GitHub
+                    {isUploading ? 'Uploading...' : 'Upload to GitHub'}
                   </button>
+
                 )}
               </div>
             )}
