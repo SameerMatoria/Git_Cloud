@@ -81,7 +81,7 @@ export default function DashboardPage() {
       setIsUploading(false); // <-- End loading
       setTimeout(() => {
         setUploadStatus('');
-      }, 5000);
+      }, 20000);
     }
   };
 
