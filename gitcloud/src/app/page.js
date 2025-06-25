@@ -54,7 +54,7 @@ export default function HomePage() {
 
 
       <section
-        id="start"
+        id="features"
         className="relative h-screen bg-gradient-to-br from-blue-700 via-purple-800 to-black px-8 py-20 flex flex-col justify-center items-center text-center overflow-hidden"
       >
         {/* Top Fade (More Faded) */}
