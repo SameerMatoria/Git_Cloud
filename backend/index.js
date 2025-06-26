@@ -117,7 +117,7 @@ app.get('/api/repos', async (req, res) => {
 // ✅ Create a new repo
 app.post('/api/repos', async (req, res) => {
   const token = getTokenFromHeader(req);
-  const { name, description = '', isPrivate = false } = req.body;
+  const { name, description = '', isPrivate = true } = req.body;
 
   if (!token) {
     return res.status(401).json({ error: 'Not authenticated' });
