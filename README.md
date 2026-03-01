@@ -1,78 +1,190 @@
-# GitCloud – GitHub-Powered Cloud Storage
+# GitCloud
 
-GitCloud is a web application that transforms your GitHub repositories into a personal cloud storage platform. Upload, preview, and manage files using GitHub as a secure backend.
+**Turn your GitHub repositories into a personal cloud drive.**
 
-## 🌐 Live Demo
-👉 [Visit GitCloud on Render](https://gitcloud-r.onrender.com)
+Upload, preview, organize, and share files — all from a sleek web interface, powered by the GitHub API. No extra storage costs, no setup, no command line needed.
 
----
+> **Note:** The latest code is on the **`Test2`** branch. The `main` branch may be behind.
 
-## Tech Stack
-
-- **Frontend**: Next.js, Tailwind CSS
-- **Backend**: Node.js, Express.js
-- **Authentication**: GitHub OAuth
-- **API**: GitHub REST API
-- **Storage**: GitHub repositories
+**Live:** [gitcloud-r.onrender.com](https://gitcloud-r.onrender.com)
 
 ---
 
 ## Features
 
--  GitHub OAuth Login
--  Upload multiple files directly to GitHub
--  Live preview for images, videos, and PDFs
--  Delete files with confirmation
--  Dashboard with storage usage & file type breakdown (coming soon)
--  Sleek, dark-themed UI
+- **Cloud File Manager** — Browse repos like folders. Navigate, upload, rename, delete files visually.
+- **Drag & Drop Upload** — Drop files or entire folders to upload. Auto-committed to GitHub. Up to 25 MB per file.
+- **Subfolder Management** — Create and delete folders inside repos.
+- **Media Preview** — View images in a fullscreen gallery with size toggle (S/M/L/List). Play audio and video inline.
+- **Code & Markdown Preview** — Syntax-highlighted code viewer (50+ languages) and rendered markdown preview.
+- **Shareable Links** — Generate public links for any file. Anyone can view or download without a GitHub account.
+- **Multi-File Select** — Select multiple files with checkboxes, bulk delete with one click.
+- **Storage Analytics** — See per-repo storage usage with visual progress bars and percentage breakdowns.
+- **Search** — Filter files within a repo instantly.
+- **Privacy Transparent** — Full permissions breakdown on the login page + dedicated privacy policy page.
 
 ---
 
-## Local Setup Guide
+## Tech Stack
 
-### Clone the Repository
-⚠️ Important: Make sure to clone the Localhost branch, not the default main branch.
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 15 (App Router), React 19, Tailwind CSS 4 |
+| Backend | Express.js 5, Node.js |
+| Auth | GitHub OAuth via [AuthSnap](https://www.npmjs.com/package/auth-snap) |
+| Database | SQLite (better-sqlite3) — for share links & session tokens |
+| Storage | GitHub API (Contents API, repos, commits) |
+| Deployment | Render (frontend + backend) |
+
+---
+
+## Architecture
+
+```
+Browser
+  │
+  ├── Login ──────────► Express Backend ──► GitHub OAuth ──► Redirect with JWT
+  │
+  └── Dashboard/Repo ──► Next.js Frontend ──(proxy /api/*)──► Express Backend ──► GitHub API
+                                                                    │
+                                                                    └──► SQLite (shares, tokens)
+```
+
+- **Auth** goes directly to the backend (avoids cross-origin cookie issues on Render)
+- **API calls** are proxied through Next.js rewrites (same-origin, cookies flow naturally)
+- **GitHub tokens** are stored in SQLite so sessions survive server restarts
+- **Rate limiting** protects API (300 req/15min), uploads (60/15min), and auth (20/15min)
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 20+
+- A GitHub OAuth App ([create one here](https://github.com/settings/developers))
+  - Homepage URL: `http://localhost:3000`
+  - Callback URL: `http://localhost:5000/auth/github/callback`
+
+### Backend
 
 ```bash
-git clone https://github.com/your-username/gitcloud.git
-cd gitcloud 
+cd backend
+npm install
+cp .env.example .env
+# Edit .env with your GitHub OAuth credentials
+npm start
+```
 
-frontend/.env
+### Frontend
+
+```bash
+cd gitcloud
+npm install
+cp .env.example .env
+# Edit .env if your backend runs on a different port
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) and sign in with GitHub.
+
+---
+
+## Environment Variables
+
+### Backend (`backend/.env`)
+
+```
+GITHUB_CLIENT_ID=your_client_id
+GITHUB_CLIENT_SECRET=your_client_secret
+GITHUB_CALLBACK_URL=http://localhost:5000/auth/github/callback
+SESSION_SECRET=random_64_char_string
+FRONTEND_URL=http://localhost:3000
+```
+
+### Frontend (`gitcloud/.env`)
+
+```
 NEXT_PUBLIC_API_BASE_URL=http://localhost:5000
-NEXT_PUBLIC_GITHUB_CLIENT_ID=your_github_client_id
-
-backend/.env
-GITHUB_CLIENT_ID=your_github_client_id
-GITHUB_CLIENT_SECRET=your_github_client_secret
-SESSION_SECRET=some_random_secret
-```
-Make sure your Authorization Callback URL is: 
-```bash
-http://localhost:3000/api/auth/github/callback
-```
-## Install Dependencies
-Frontend
-```bash
-cd .\gitcloud\
-npm install
-```
-Backend
-```bash
-cd .\backend\ 
-npm install
 ```
 
-### Open in Browser
-Go to: http://localhost:3000
+---
 
-## Notes
-All uploaded files are stored in your GitHub repo.
+## Deployment (Render)
 
-Only authenticated users can access file operations.
+**Backend** — Web Service:
+- Build: `cd backend && npm install`
+- Start: `cd backend && node index.js`
+- Set all backend env vars (use production URLs)
 
-Tested on modern browsers and responsive for mobile devices.
+**Frontend** — Web Service:
+- Build: `cd gitcloud && npm install && npm run build`
+- Start: `cd gitcloud && npm start`
+- Set `NEXT_PUBLIC_API_BASE_URL` to your backend URL
+
+**GitHub OAuth App** — Update the callback URL to point to your backend's deployed URL.
+
+---
+
+## Project Structure
+
+```
+├── backend/
+│   ├── index.js          # All API routes, auth, middleware
+│   ├── db.js             # SQLite setup (shares, tokens tables)
+│   ├── .env.example      # Environment template
+│   └── package.json
+│
+├── gitcloud/
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── page.js           # Landing page
+│   │   │   ├── login/page.js     # Login + permissions card
+│   │   │   ├── dashboard/page.js # Repo dashboard + storage stats
+│   │   │   ├── repo/page.js      # File browser (main feature)
+│   │   │   ├── privacy/page.js   # Privacy policy
+│   │   │   └── s/[id]/page.js    # Public share page
+│   │   ├── components/
+│   │   │   ├── Navbar.jsx
+│   │   │   ├── Modal.jsx
+│   │   │   ├── Toast.jsx
+│   │   │   └── CodePreviewModal.jsx
+│   │   └── lib/
+│   │       └── api.js            # Axios instance
+│   ├── next.config.mjs           # API proxy rewrites
+│   ├── .env.example
+│   └── package.json
+│
+└── README.md
+```
+
+---
+
+## Storage Limits (GitHub)
+
+| Limit | Value |
+|-------|-------|
+| Per file (API upload) | 25 MB |
+| Per file (hard limit) | 100 MB |
+| Per repo (recommended) | 1 GB |
+| Per account | No total cap, up to 100K repos |
+| Theoretical max | ~100 TB |
+
+---
 
 ## Contributing
-Feel free to fork this repo and submit a pull request. Let's build GitCloud together!
 
+Contributions are welcome! Check out the [open issues](https://github.com/SameerMatoria/Git_Cloud/issues) for things to work on.
 
+1. Fork the repo
+2. Create a branch (`git checkout -b feature/my-feature`)
+3. Commit your changes
+4. Push and open a PR against the `Test2` branch
+
+Look for issues labeled `good first issue` if you're new to the project.
+
+---
+
+## License
+
+MIT
