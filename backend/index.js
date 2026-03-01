@@ -20,6 +20,7 @@ for (const key of REQUIRED_ENV) {
 }
 
 const app = express();
+app.set('trust proxy', 1); // Trust first proxy (Render) — required for secure cookies behind HTTPS
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB per file
 const upload = multer({ limits: { fileSize: MAX_FILE_SIZE } });
 const PORT = process.env.PORT || 5000;
