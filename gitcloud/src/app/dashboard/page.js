@@ -145,6 +145,17 @@ export default function DashboardPage() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
+    // Extract session token from URL (passed by backend after OAuth)
+    // and store it as a cookie on the frontend domain
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    if (token) {
+      document.cookie = `authsnap_session=${token}; path=/; max-age=86400; secure; samesite=lax`;
+      params.delete('token');
+      const clean = params.toString();
+      window.history.replaceState({}, '', clean ? `?${clean}` : window.location.pathname);
+    }
+
     const fetchUserAndRepos = async () => {
       try {
         const userRes = await api.get('/api/user');

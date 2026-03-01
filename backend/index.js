@@ -116,16 +116,22 @@ app.use('/api/', apiLimiter);
 app.use('/api/upload', uploadLimiter);
 app.use('/auth/', authLimiter);
 
-// Fix SameSite cookie for cross-origin API calls.
-// AuthSnap hardcodes SameSite=Lax which blocks cross-origin AJAX.
-// This middleware patches the Set-Cookie header to use SameSite=None.
+// Intercept AuthSnap's callback to pass the session JWT via URL instead of
+// relying on cross-origin cookies (which break on onrender.com subdomains).
+// The frontend sets the cookie on its own domain, then API calls go through
+// the Next.js proxy (same-origin), so the cookie flows naturally.
 app.use('/auth', (req, res, next) => {
-  const origSetHeader = res.setHeader.bind(res);
-  res.setHeader = (name, value) => {
-    if (name.toLowerCase() === 'set-cookie' && typeof value === 'string' && value.includes('authsnap_session')) {
-      value = value.replace('SameSite=Lax', 'SameSite=None');
+  const origRedirect = res.redirect.bind(res);
+  res.redirect = (url) => {
+    const cookieHeader = res.getHeader('set-cookie');
+    const cookie = Array.isArray(cookieHeader) ? cookieHeader.find(c => c.includes('authsnap_session=')) : (typeof cookieHeader === 'string' && cookieHeader.includes('authsnap_session=') ? cookieHeader : null);
+    if (cookie && url.startsWith(FRONTEND_URL)) {
+      const token = cookie.split('authsnap_session=')[1].split(';')[0];
+      res.removeHeader('set-cookie');
+      const sep = url.includes('?') ? '&' : '?';
+      return origRedirect(`${url}${sep}token=${encodeURIComponent(token)}`);
     }
-    return origSetHeader(name, value);
+    return origRedirect(url);
   };
   next();
 });
@@ -138,7 +144,7 @@ app.use(auth.express());
 
 // Custom logout route that redirects to the frontend login page
 app.get('/api/logout', (req, res) => {
-  res.clearCookie('authsnap_session', { path: '/', sameSite: 'none', secure: true });
+  res.clearCookie('authsnap_session', { path: '/' });
   if (req.user?.id) githubUsers.delete(req.user.id);
   res.redirect(`${FRONTEND_URL}/login`);
 });

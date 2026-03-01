@@ -36,7 +36,7 @@ export default function Navbar({ user }) {
             </button>
           )}
           <button
-            onClick={() => { window.location.href = `${process.env.NEXT_PUBLIC_API_BASE_URL || ''}/api/logout`; }}
+            onClick={() => { window.location.href = '/api/logout'; }}
             className="px-3.5 py-1.5 text-sm text-zinc-500 hover:text-white rounded-lg hover:bg-white/[0.06] transition-all"
           >
             Log out
