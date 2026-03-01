@@ -1,3 +1,13 @@
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files
+.env
+.env.local
+.env.production
+!.env.example
+/node_modules
+
+# SQLite database
+data/
+*.db
+*.db-wal
+*.db-shm

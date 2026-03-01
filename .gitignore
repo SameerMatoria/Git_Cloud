@@ -1,0 +1,24 @@
+# dependencies
+node_modules/
+
+# env files
+.env
+.env.local
+.env.production
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# logs
+*.log
+
+# SQLite database
+*.db
+*.db-wal
+*.db-shm
