@@ -116,6 +116,20 @@ app.use('/api/', apiLimiter);
 app.use('/api/upload', uploadLimiter);
 app.use('/auth/', authLimiter);
 
+// Fix SameSite cookie for cross-origin API calls.
+// AuthSnap hardcodes SameSite=Lax which blocks cross-origin AJAX.
+// This middleware patches the Set-Cookie header to use SameSite=None.
+app.use('/auth', (req, res, next) => {
+  const origSetHeader = res.setHeader.bind(res);
+  res.setHeader = (name, value) => {
+    if (name.toLowerCase() === 'set-cookie' && typeof value === 'string' && value.includes('authsnap_session')) {
+      value = value.replace('SameSite=Lax', 'SameSite=None');
+    }
+    return origSetHeader(name, value);
+  };
+  next();
+});
+
 // AuthSnap middleware — auto-creates:
 //   GET /auth/github          → start OAuth flow
 //   GET /auth/github/callback → handle GitHub redirect
@@ -124,7 +138,7 @@ app.use(auth.express());
 
 // Custom logout route that redirects to the frontend login page
 app.get('/api/logout', (req, res) => {
-  res.clearCookie('authsnap_session', { path: '/' });
+  res.clearCookie('authsnap_session', { path: '/', sameSite: 'none', secure: true });
   if (req.user?.id) githubUsers.delete(req.user.id);
   res.redirect(`${FRONTEND_URL}/login`);
 });
