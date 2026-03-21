@@ -2,13 +2,19 @@
 
 import { useEffect, useState } from 'react';
 
-export default function UploadProgressToast({ uploadState, onClose }) {
+export default function ProgressToast({ state, onClose, action = 'upload' }) {
   const [show, setShow] = useState(false);
 
-  const { status, currentFile, completedCount, totalCount, failedCount } = uploadState || {};
+  const { status, currentFile, completedCount, totalCount, failedCount } = state || {};
+
+  const labels = {
+    upload: { active: 'Uploading files...', done: 'Upload complete!', failed: 'Upload failed', partial: 'Upload finished with errors', past: 'uploaded' },
+    delete: { active: 'Deleting files...', done: 'Deleted successfully!', failed: 'Delete failed', partial: 'Delete finished with errors', past: 'deleted' },
+  };
+  const label = labels[action] || labels.upload;
 
   useEffect(() => {
-    if (status === 'uploading' || status === 'success' || status === 'error') {
+    if (status === 'active' || status === 'success' || status === 'error') {
       requestAnimationFrame(() => setShow(true));
     }
 
@@ -25,33 +31,39 @@ export default function UploadProgressToast({ uploadState, onClose }) {
 
   const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
-  const isUploading = status === 'uploading';
+  const isActive = status === 'active';
   const isSuccess = status === 'success';
   const isError = status === 'error';
+
+  const accentColor = action === 'delete' ? 'red' : 'blue';
 
   const borderColor = isSuccess
     ? 'border-emerald-500/30'
     : isError
     ? 'border-red-500/30'
-    : 'border-blue-500/30';
+    : `border-${accentColor}-500/30`;
 
   const bgColor = isSuccess
     ? 'bg-emerald-500/10'
     : isError
     ? 'bg-red-500/10'
-    : 'bg-blue-500/10';
+    : `bg-${accentColor}-500/10`;
 
   const barColor = isSuccess
     ? 'bg-emerald-500'
     : isError
     ? 'bg-red-500'
-    : 'bg-blue-500';
+    : `bg-${accentColor}-500`;
 
   const textColor = isSuccess
     ? 'text-emerald-300'
     : isError
     ? 'text-red-300'
-    : 'text-blue-300';
+    : `text-${accentColor}-300`;
+
+  const spinnerColor = action === 'delete' ? 'text-red-400' : 'text-blue-400';
+
+  // Tailwind safelist: border-blue-500/30 bg-blue-500/10 bg-blue-500 text-blue-300 border-red-500/30 bg-red-500/10 bg-red-500 text-red-300
 
   return (
     <div className="fixed top-20 right-4 z-[70]">
@@ -63,8 +75,8 @@ export default function UploadProgressToast({ uploadState, onClose }) {
         {/* Header */}
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            {isUploading && (
-              <svg className="animate-spin w-4 h-4 text-blue-400" viewBox="0 0 24 24" fill="none">
+            {isActive && (
+              <svg className={`animate-spin w-4 h-4 ${spinnerColor}`} viewBox="0 0 24 24" fill="none">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
@@ -80,12 +92,12 @@ export default function UploadProgressToast({ uploadState, onClose }) {
               </svg>
             )}
             <span className={`text-sm font-medium ${textColor}`}>
-              {isUploading && 'Uploading files...'}
-              {isSuccess && 'Upload complete!'}
-              {isError && (failedCount === totalCount ? 'Upload failed' : 'Upload finished with errors')}
+              {isActive && label.active}
+              {isSuccess && label.done}
+              {isError && (failedCount === totalCount ? label.failed : label.partial)}
             </span>
           </div>
-          {!isUploading && (
+          {!isActive && (
             <button
               onClick={() => { setShow(false); setTimeout(onClose, 300); }}
               className="text-current opacity-40 hover:opacity-100 transition-opacity"
@@ -108,9 +120,9 @@ export default function UploadProgressToast({ uploadState, onClose }) {
         {/* Status text */}
         <div className="flex items-center justify-between">
           <p className="text-xs text-zinc-400 truncate max-w-[200px]">
-            {isUploading && currentFile && currentFile}
-            {isSuccess && `${completedCount} file${completedCount !== 1 ? 's' : ''} uploaded`}
-            {isError && `${completedCount} uploaded, ${failedCount} failed`}
+            {isActive && currentFile && currentFile}
+            {isSuccess && `${completedCount} file${completedCount !== 1 ? 's' : ''} ${label.past}`}
+            {isError && `${completedCount} ${label.past}, ${failedCount} failed`}
           </p>
           <span className="text-xs text-zinc-500">
             {completedCount}/{totalCount}

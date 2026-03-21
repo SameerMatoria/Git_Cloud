@@ -7,7 +7,7 @@ import api from '@/lib/api';
 import Navbar from '@/components/Navbar';
 import Modal from '@/components/Modal';
 import Toast from '@/components/Toast';
-import UploadProgressToast from '@/components/UploadProgressToast';
+import ProgressToast from '@/components/ProgressToast';
 import CodePreviewModal from '@/components/CodePreviewModal';
 
 // ── Icons ──────────────────────────────────────────────────────
@@ -202,6 +202,10 @@ export default function RepoPage() {
   const [uploadProgress, setUploadProgress] = useState(null);
   const clearUploadProgress = useCallback(() => setUploadProgress(null), []);
 
+  // Delete progress state
+  const [deleteProgress, setDeleteProgress] = useState(null);
+  const clearDeleteProgress = useCallback(() => setDeleteProgress(null), []);
+
   // Fetch data
   useEffect(() => {
     if (!repo) return;
@@ -261,13 +265,14 @@ export default function RepoPage() {
       'Delete File',
       `Are you sure you want to delete "${file.name}"? This cannot be undone.`,
       async () => {
+        setDeleteProgress({ status: 'active', currentFile: file.name, completedCount: 0, totalCount: 1, failedCount: 0 });
         try {
           await api.delete('/api/delete-file', { data: { repo, path: file.path, sha: file.sha } });
-          showToast('File deleted!', 'success');
+          setDeleteProgress({ status: 'success', currentFile: '', completedCount: 1, totalCount: 1, failedCount: 0 });
           const updated = await api.get(`/api/contents?repo=${repo}&path=${path}`);
           setContents(Array.isArray(updated.data) ? updated.data : []);
         } catch (err) {
-          showToast(`Failed to delete: ${err.response?.data?.error || err.message}`, 'error');
+          setDeleteProgress({ status: 'error', currentFile: '', completedCount: 0, totalCount: 1, failedCount: 1 });
         }
       }
     );
@@ -300,17 +305,34 @@ export default function RepoPage() {
       'Delete Selected Files',
       `Are you sure you want to delete ${toDelete.length} file(s)? This cannot be undone.`,
       async () => {
+        const total = toDelete.length;
+        let completed = 0;
+        let failed = 0;
+
+        setDeleteProgress({ status: 'active', currentFile: toDelete[0].name, completedCount: 0, totalCount: total, failedCount: 0 });
+
         for (const file of toDelete) {
+          setDeleteProgress((prev) => ({ ...prev, currentFile: file.name }));
           try {
             await api.delete('/api/delete-file', { data: { repo, path: file.path, sha: file.sha } });
-          } catch (err) {
-            console.error(`Failed to delete ${file.name}:`, err.response?.data || err.message);
+            completed++;
+          } catch {
+            failed++;
           }
+          setDeleteProgress((prev) => ({ ...prev, completedCount: completed, failedCount: failed }));
         }
+
+        setDeleteProgress((prev) => ({
+          ...prev,
+          status: failed === total ? 'error' : failed > 0 ? 'error' : 'success',
+          currentFile: '',
+        }));
+
         setSelectedFiles(new Set());
-        const updated = await api.get(`/api/contents?repo=${repo}&path=${path}`);
-        setContents(Array.isArray(updated.data) ? updated.data : []);
-        showToast(`${toDelete.length} file(s) deleted.`, 'success');
+        try {
+          const updated = await api.get(`/api/contents?repo=${repo}&path=${path}`);
+          setContents(Array.isArray(updated.data) ? updated.data : []);
+        } catch {}
       },
       'Delete',
       'danger'
@@ -409,7 +431,7 @@ export default function RepoPage() {
     let completed = 0;
     let failed = 0;
 
-    setUploadProgress({ status: 'uploading', currentFile: fileList[0].name, completedCount: 0, totalCount: total, failedCount: 0 });
+    setUploadProgress({ status: 'active', currentFile: fileList[0].name, completedCount: 0, totalCount: total, failedCount: 0 });
 
     for (const file of fileList) {
       setUploadProgress((prev) => ({ ...prev, currentFile: file.name }));
@@ -620,7 +642,8 @@ export default function RepoPage() {
       <Modal isOpen={modal.open} onClose={closeModal} onConfirm={modal.onConfirm}
         title={modal.title} message={modal.message} confirmText={modal.confirmText} confirmStyle={modal.confirmStyle} />
       <Toast message={toast.message} type={toast.type} isVisible={toast.visible} onClose={hideToast} />
-      <UploadProgressToast uploadState={uploadProgress} onClose={clearUploadProgress} />
+      <ProgressToast state={uploadProgress} onClose={clearUploadProgress} action="upload" />
+      {!uploadProgress && <ProgressToast state={deleteProgress} onClose={clearDeleteProgress} action="delete" />}
 
       {/* Hidden file input for folder uploads */}
       <input type="file" ref={folderUploadRef} multiple className="hidden" onChange={handleFolderUpload} />
