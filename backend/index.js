@@ -654,27 +654,44 @@ app.get('/api/download', auth.protect(), async (req, res) => {
   const gh = requireGitHub(req, res);
   if (!gh) return;
 
-  const { repo, path: filePath } = req.query;
-  if (!repo || !filePath) return res.status(400).json({ error: 'repo and path are required' });
+  const { repo: repoName, path: filePath } = req.query;
+  if (!repoName || !filePath) return res.status(400).json({ error: 'repo and path are required' });
+
+  const headers = { Authorization: `Bearer ${gh.token}` };
+  const fileName = filePath.split('/').pop();
 
   try {
+    // Try raw content first (works for files up to 100 MB)
     const response = await axios.get(
-      `https://api.github.com/repos/${gh.username}/${repo}/contents/${filePath}`,
+      `https://api.github.com/repos/${gh.username}/${repoName}/contents/${filePath}`,
       {
-        headers: {
-          Authorization: `Bearer ${gh.token}`,
-          Accept: 'application/vnd.github.v3.raw',
-        },
+        headers: { ...headers, Accept: 'application/vnd.github.v3.raw' },
         responseType: 'arraybuffer',
       }
     );
-    const fileName = filePath.split('/').pop();
     res.set('Content-Disposition', `attachment; filename="${fileName}"`);
     res.set('Content-Type', 'application/octet-stream');
     res.send(response.data);
-  } catch (err) {
-    console.error('Download error:', err.response?.data?.toString() || err.message);
-    res.status(500).json({ error: 'Download failed' });
+  } catch (rawErr) {
+    // Fallback: use Blobs API for larger files or if raw fails
+    try {
+      const contentsRes = await axios.get(
+        `https://api.github.com/repos/${gh.username}/${repoName}/contents/${filePath}`,
+        { headers: { ...headers, Accept: 'application/vnd.github.v3+json' } }
+      );
+      const blobSha = contentsRes.data.sha;
+      const blobRes = await axios.get(
+        `https://api.github.com/repos/${gh.username}/${repoName}/git/blobs/${blobSha}`,
+        { headers: { ...headers, Accept: 'application/vnd.github.v3+json' } }
+      );
+      const buffer = Buffer.from(blobRes.data.content, 'base64');
+      res.set('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.set('Content-Type', 'application/octet-stream');
+      res.send(buffer);
+    } catch (blobErr) {
+      console.error('Download error:', rawErr.response?.data?.toString() || rawErr.message, blobErr.response?.data || blobErr.message);
+      res.status(500).json({ error: 'Download failed' });
+    }
   }
 });
 
