@@ -661,25 +661,26 @@ app.get('/api/download', auth.protect(), async (req, res) => {
   const fileName = filePath.split('/').pop();
 
   try {
-    // Try raw content first (works for files up to 100 MB)
-    const response = await axios.get(
+    // First get file metadata to find the download URL
+    const metaRes = await axios.get(
       `https://api.github.com/repos/${gh.username}/${repoName}/contents/${filePath}`,
-      {
-        headers: { ...headers, Accept: 'application/vnd.github.v3.raw' },
-        responseType: 'arraybuffer',
-      }
+      { headers: { ...headers, Accept: 'application/vnd.github.v3+json' } }
     );
-    res.set('Content-Disposition', `attachment; filename="${fileName}"`);
-    res.set('Content-Type', 'application/octet-stream');
-    res.send(response.data);
-  } catch (rawErr) {
-    // Fallback: use Blobs API for larger files or if raw fails
-    try {
-      const contentsRes = await axios.get(
-        `https://api.github.com/repos/${gh.username}/${repoName}/contents/${filePath}`,
-        { headers: { ...headers, Accept: 'application/vnd.github.v3+json' } }
-      );
-      const blobSha = contentsRes.data.sha;
+
+    const downloadUrl = metaRes.data.download_url;
+
+    if (downloadUrl) {
+      // Use GitHub's raw download URL (works for all file sizes, no auth needed for public repos)
+      const response = await axios.get(downloadUrl, {
+        responseType: 'arraybuffer',
+        headers: { Authorization: `Bearer ${gh.token}` },
+      });
+      res.set('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.set('Content-Type', 'application/octet-stream');
+      res.send(response.data);
+    } else {
+      // Fallback: use Blobs API
+      const blobSha = metaRes.data.sha;
       const blobRes = await axios.get(
         `https://api.github.com/repos/${gh.username}/${repoName}/git/blobs/${blobSha}`,
         { headers: { ...headers, Accept: 'application/vnd.github.v3+json' } }
@@ -688,10 +689,14 @@ app.get('/api/download', auth.protect(), async (req, res) => {
       res.set('Content-Disposition', `attachment; filename="${fileName}"`);
       res.set('Content-Type', 'application/octet-stream');
       res.send(buffer);
-    } catch (blobErr) {
-      console.error('Download error:', rawErr.response?.data?.toString() || rawErr.message, blobErr.response?.data || blobErr.message);
-      res.status(500).json({ error: 'Download failed' });
     }
+  } catch (err) {
+    console.error('Download error:', err.response?.status, err.response?.data || err.message);
+    res.status(err.response?.status || 500).json({
+      error: 'Download failed',
+      details: err.response?.data?.message || err.message,
+      url: `https://api.github.com/repos/${gh.username}/${repoName}/contents/${filePath}`,
+    });
   }
 });
 
