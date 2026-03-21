@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
+import axios from 'axios';
 import api, { directApi } from '@/lib/api';
 import Navbar from '@/components/Navbar';
 import Modal from '@/components/Modal';
@@ -405,7 +406,11 @@ export default function RepoPage() {
       if (file._isChunked) {
         // Chunked file: use chunked download endpoint
         res = await api.get(`/api/download-chunked?repo=${repo}&manifestPath=${encodeURIComponent(file._manifestPath)}`, { responseType: 'blob' });
+      } else if (file.download_url) {
+        // Use GitHub's direct download URL (works for both public & private repos)
+        res = await axios.get(file.download_url, { responseType: 'blob' });
       } else {
+        // Fallback to backend proxy
         res = await api.get(`/api/download?repo=${repo}&path=${file.path}`, { responseType: 'blob' });
       }
       const url = window.URL.createObjectURL(new Blob([res.data]));
