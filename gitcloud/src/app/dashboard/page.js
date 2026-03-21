@@ -7,7 +7,7 @@ import Navbar from '@/components/Navbar';
 import Toast from '@/components/Toast';
 import Modal from '@/components/Modal';
 
-const CHUNK_SIZE = 80 * 1024 * 1024; // 80 MB chunks for large files
+const CHUNK_SIZE = 20 * 1024 * 1024; // 20 MB chunks for large files
 
 function validateRepoName(name) {
   if (!name.trim()) return 'Repository name is required';

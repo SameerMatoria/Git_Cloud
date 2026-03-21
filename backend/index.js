@@ -21,9 +21,9 @@ for (const key of REQUIRED_ENV) {
 
 const app = express();
 app.set('trust proxy', 1); // Trust first proxy (Render) — required for secure cookies behind HTTPS
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB per file (uses Git Blobs API for >25 MB)
-const CHUNK_SIZE = 80 * 1024 * 1024; // 80 MB chunks for large file splitting
-const chunkedUpload = multer({ limits: { fileSize: CHUNK_SIZE + 5 * 1024 * 1024 } }); // slight buffer for encoding
+const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB per file for standard upload
+const CHUNK_SIZE = 20 * 1024 * 1024; // 20 MB chunks (keeps memory low on free tier)
+const chunkedUpload = multer({ limits: { fileSize: CHUNK_SIZE + 2 * 1024 * 1024 } });
 const upload = multer({ limits: { fileSize: MAX_FILE_SIZE } });
 const PORT = process.env.PORT || 5000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://gitcloud-r.onrender.com';

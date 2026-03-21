@@ -464,7 +464,7 @@ export default function RepoPage() {
 
     setUploadProgress({ status: 'active', currentFile: fileList[0].name, completedCount: 0, totalCount: total, failedCount: 0, percent: 0 });
 
-    const CHUNK_SIZE = 80 * 1024 * 1024;
+    const CHUNK_SIZE = 20 * 1024 * 1024;
 
     const trackProgress = (fileIndex, fileSize) => ({
       onUploadProgress: (e) => {
