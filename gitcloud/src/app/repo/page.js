@@ -490,15 +490,18 @@ export default function RepoPage() {
         if (file.size > CHUNK_SIZE) {
           // Large file: upload in chunks
           const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+          const chunkRepos = {}; // Track which repo each chunk went to
+
           for (let i = 0; i < totalChunks; i++) {
             setUploadProgress((prev) => ({ ...prev, currentFile: `${file.name} (chunk ${i + 1}/${totalChunks})` }));
             const start = i * CHUNK_SIZE;
             const end = Math.min(start + CHUNK_SIZE, file.size);
             const chunkBlob = file.slice(start, end);
             const chunkSize = end - start;
+            const chunkNum = String(i + 1).padStart(3, '0');
 
             const formData = new FormData();
-            formData.append('chunk', chunkBlob, `${file.name}.chunk.${String(i + 1).padStart(3, '0')}`);
+            formData.append('chunk', chunkBlob, `${file.name}.chunk.${chunkNum}`);
             formData.append('repo', repo);
             formData.append('path', uploadingFolder || '');
             formData.append('chunkIndex', i);
@@ -506,15 +509,30 @@ export default function RepoPage() {
             formData.append('fileName', file.name);
             formData.append('totalSize', file.size);
 
-            await directApi.post('/api/upload-chunk', formData, {
+            const chunkRes = await directApi.post('/api/upload-chunk', formData, {
               headers: { 'Content-Type': 'multipart/form-data' },
               ...trackProgress(fi, chunkSize),
             });
+            // Track which repo this chunk was stored in
+            if (chunkRes.data.targetRepo && chunkRes.data.targetRepo !== repo) {
+              chunkRepos[chunkNum] = chunkRes.data.targetRepo;
+            }
             // Server responded — this chunk is fully done
             completedBytes += chunkSize;
             lastReportedPercent = (completedBytes / totalBytes) * 100;
             setUploadProgress((prev) => ({ ...prev, percent: Math.min(lastReportedPercent, 99.9) }));
           }
+
+          // Create manifest in the primary repo after all chunks succeed
+          setUploadProgress((prev) => ({ ...prev, currentFile: `${file.name} (creating manifest...)` }));
+          await api.post('/api/create-manifest', {
+            repo,
+            path: uploadingFolder || '',
+            fileName: file.name,
+            totalSize: file.size,
+            totalChunks,
+            chunkRepos,
+          });
         } else {
           // Normal file
           const formData = new FormData();

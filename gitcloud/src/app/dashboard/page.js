@@ -231,15 +231,17 @@ export default function DashboardPage() {
         if (file.size > CHUNK_SIZE) {
           // Large file: upload in chunks
           const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+          const chunkRepos = {};
           setUploadStatus(`Chunking ${file.name} (0/${totalChunks})...`);
 
           for (let i = 0; i < totalChunks; i++) {
             const start = i * CHUNK_SIZE;
             const end = Math.min(start + CHUNK_SIZE, file.size);
             const chunkBlob = file.slice(start, end);
+            const chunkNum = String(i + 1).padStart(3, '0');
 
             const formData = new FormData();
-            formData.append('chunk', chunkBlob, `${file.name}.chunk.${String(i + 1).padStart(3, '0')}`);
+            formData.append('chunk', chunkBlob, `${file.name}.chunk.${chunkNum}`);
             formData.append('repo', selectedRepo);
             formData.append('path', '');
             formData.append('chunkIndex', i);
@@ -248,8 +250,22 @@ export default function DashboardPage() {
             formData.append('totalSize', file.size);
 
             setUploadStatus(`Uploading ${file.name} chunk ${i + 1}/${totalChunks}...`);
-            await directApi.post('/api/upload-chunk', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+            const chunkRes = await directApi.post('/api/upload-chunk', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+            if (chunkRes.data.targetRepo && chunkRes.data.targetRepo !== selectedRepo) {
+              chunkRepos[chunkNum] = chunkRes.data.targetRepo;
+            }
           }
+
+          // Create manifest after all chunks succeed
+          setUploadStatus(`Creating manifest for ${file.name}...`);
+          await api.post('/api/create-manifest', {
+            repo: selectedRepo,
+            path: '',
+            fileName: file.name,
+            totalSize: file.size,
+            totalChunks,
+            chunkRepos,
+          });
         } else {
           // Normal file: use standard upload
           setUploadStatus(`Uploading ${file.name}...`);

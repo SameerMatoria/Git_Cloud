@@ -470,32 +470,50 @@ app.post('/api/upload-chunk', auth.protect(), chunkedUpload.single('chunk'), asy
     // Auto-overflow: find a repo with enough space for each chunk
     const targetRepo = await getTargetRepo(gh, repo, chunk.size);
 
-    // Use Blobs API for all chunks (they can be up to 80 MB)
+    // Use Blobs API for all chunks
     await uploadViaBlobsAPI(gh, targetRepo, chunkPath, content, msg);
 
-    // If this is the last chunk, create the manifest
-    if (Number(chunkIndex) === Number(totalChunks) - 1) {
-      const manifest = {
-        originalName: fileName,
-        totalSize: Number(totalSize),
-        totalChunks: Number(totalChunks),
-        chunkSize: CHUNK_SIZE,
-        createdAt: new Date().toISOString(),
-      };
-      const manifestPath = uploadDir ? `${uploadDir}/${fileName}.manifest.json` : `${fileName}.manifest.json`;
-      const manifestContent = Buffer.from(JSON.stringify(manifest, null, 2)).toString('base64');
-
-      await axios.put(
-        `https://api.github.com/repos/${gh.username}/${targetRepo}/contents/${manifestPath}`,
-        { message: `Upload manifest for ${fileName}`, content: manifestContent },
-        { headers: { Authorization: `Bearer ${gh.token}`, Accept: 'application/vnd.github.v3+json' } }
-      );
-    }
-
-    res.json({ success: true, chunk: Number(chunkIndex) + 1, total: Number(totalChunks) });
+    // Return which repo this chunk was stored in
+    res.json({ success: true, chunk: Number(chunkIndex) + 1, total: Number(totalChunks), targetRepo });
   } catch (err) {
     console.error('Chunk upload error:', err.response?.data || err.message);
     res.status(500).json({ error: `Failed to upload chunk ${Number(chunkIndex) + 1}` });
+  }
+});
+
+// ── Create Manifest (called by frontend after all chunks succeed) ──
+app.post('/api/create-manifest', auth.protect(), express.json(), async (req, res) => {
+  const gh = requireGitHub(req, res);
+  if (!gh) return;
+
+  const { repo, path: uploadDir, fileName, totalSize, totalChunks, chunkRepos } = req.body;
+  if (!repo || !fileName || !totalChunks) {
+    return res.status(400).json({ error: 'repo, fileName, and totalChunks are required' });
+  }
+
+  try {
+    const manifest = {
+      originalName: fileName,
+      totalSize: Number(totalSize),
+      totalChunks: Number(totalChunks),
+      chunkSize: CHUNK_SIZE,
+      chunkRepos: chunkRepos || {}, // { "001": "repo-name", "002": "repo-name-2", ... }
+      createdAt: new Date().toISOString(),
+    };
+    const manifestPath = uploadDir ? `${uploadDir}/${fileName}.manifest.json` : `${fileName}.manifest.json`;
+    const manifestContent = Buffer.from(JSON.stringify(manifest, null, 2)).toString('base64');
+
+    // Always store manifest in the PRIMARY repo
+    await axios.put(
+      `https://api.github.com/repos/${gh.username}/${repo}/contents/${manifestPath}`,
+      { message: `Upload manifest for ${fileName}`, content: manifestContent },
+      { headers: { Authorization: `Bearer ${gh.token}`, Accept: 'application/vnd.github.v3+json' } }
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Manifest creation error:', err.response?.data || err.message);
+    res.status(500).json({ error: 'Failed to create manifest' });
   }
 });
 
@@ -522,13 +540,19 @@ app.get('/api/download-chunked', auth.protect(), async (req, res) => {
     res.set('Content-Length', manifest.totalSize);
 
     // 2. Fetch and stream each chunk using download_url
+    const chunkRepos = manifest.chunkRepos || {};
+
     for (let i = 1; i <= manifest.totalChunks; i++) {
       const chunkNum = String(i).padStart(3, '0');
       const chunkName = `${manifest.originalName}.chunk.${chunkNum}`;
       const chunkPath = dir ? `${dir}/${chunkName}` : chunkName;
 
+      // Determine which repo this chunk is in
+      const chunkRepo = chunkRepos[chunkNum] || repo;
+      const chunkApiBase = `https://api.github.com/repos/${gh.username}/${chunkRepo}`;
+
       // Get chunk metadata to find download_url
-      const metaRes = await axios.get(`${apiBase}/contents/${chunkPath}`, { headers });
+      const metaRes = await axios.get(`${chunkApiBase}/contents/${chunkPath}`, { headers });
       const downloadUrl = metaRes.data.download_url;
 
       if (downloadUrl) {
@@ -539,7 +563,7 @@ app.get('/api/download-chunked', auth.protect(), async (req, res) => {
         res.write(Buffer.from(chunkRes.data));
       } else {
         // Fallback: use Blobs API
-        const blobRes = await axios.get(`${apiBase}/git/blobs/${metaRes.data.sha}`, { headers });
+        const blobRes = await axios.get(`${chunkApiBase}/git/blobs/${metaRes.data.sha}`, { headers });
         res.write(Buffer.from(blobRes.data.content, 'base64'));
       }
     }
