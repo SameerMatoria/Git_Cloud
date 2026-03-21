@@ -44,4 +44,19 @@ db.exec(`
   )
 `);
 
+// Repo groups: links overflow repos (mydrive-2, mydrive-3) to a primary repo
+db.exec(`
+  CREATE TABLE IF NOT EXISTS repo_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    primaryRepo TEXT NOT NULL,
+    linkedRepo TEXT NOT NULL,
+    orderIndex INTEGER NOT NULL DEFAULT 1,
+    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(username, linkedRepo)
+  )
+`);
+
+db.exec(`CREATE INDEX IF NOT EXISTS idx_repo_groups_primary ON repo_groups(username, primaryRepo)`);
+
 export default db;

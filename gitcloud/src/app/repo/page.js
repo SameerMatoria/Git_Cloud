@@ -265,15 +265,34 @@ export default function RepoPage() {
       'Delete File',
       `Are you sure you want to delete "${file.name}"? This cannot be undone.`,
       async () => {
-        setDeleteProgress({ status: 'active', currentFile: file.name, completedCount: 0, totalCount: 1, failedCount: 0 });
-        try {
-          await api.delete('/api/delete-file', { data: { repo, path: file.path, sha: file.sha } });
-          setDeleteProgress({ status: 'success', currentFile: '', completedCount: 1, totalCount: 1, failedCount: 0 });
-          const updated = await api.get(`/api/contents?repo=${repo}&path=${path}`);
-          setContents(Array.isArray(updated.data) ? updated.data : []);
-        } catch (err) {
-          setDeleteProgress({ status: 'error', currentFile: '', completedCount: 0, totalCount: 1, failedCount: 1 });
+        if (file._isChunked) {
+          // Delete all chunks + manifest
+          const chunkPattern = new RegExp(`^${file.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.chunk\\.\\d{3}$`);
+          const relatedFiles = contents.filter((item) => chunkPattern.test(item.name) || item.name === file._originalManifestName);
+          const total = relatedFiles.length;
+          let completed = 0;
+          let failed = 0;
+          setDeleteProgress({ status: 'active', currentFile: file.name, completedCount: 0, totalCount: total, failedCount: 0 });
+
+          for (const chunk of relatedFiles) {
+            try {
+              await api.delete('/api/delete-file', { data: { repo, path: chunk.path, sha: chunk.sha } });
+              completed++;
+            } catch { failed++; }
+            setDeleteProgress((prev) => ({ ...prev, completedCount: completed, failedCount: failed }));
+          }
+          setDeleteProgress((prev) => ({ ...prev, status: failed > 0 ? 'error' : 'success', currentFile: '' }));
+        } else {
+          setDeleteProgress({ status: 'active', currentFile: file.name, completedCount: 0, totalCount: 1, failedCount: 0 });
+          try {
+            await api.delete('/api/delete-file', { data: { repo, path: file.path, sha: file.sha } });
+            setDeleteProgress({ status: 'success', currentFile: '', completedCount: 1, totalCount: 1, failedCount: 0 });
+          } catch (err) {
+            setDeleteProgress({ status: 'error', currentFile: '', completedCount: 0, totalCount: 1, failedCount: 1 });
+          }
         }
+        const updated = await api.get(`/api/contents?repo=${repo}&path=${path}`);
+        setContents(Array.isArray(updated.data) ? updated.data : []);
       }
     );
   };
@@ -382,7 +401,13 @@ export default function RepoPage() {
 
   const handleDownload = async (file) => {
     try {
-      const res = await api.get(`/api/download?repo=${repo}&path=${file.path}`, { responseType: 'blob' });
+      let res;
+      if (file._isChunked) {
+        // Chunked file: use chunked download endpoint
+        res = await api.get(`/api/download-chunked?repo=${repo}&manifestPath=${encodeURIComponent(file._manifestPath)}`, { responseType: 'blob' });
+      } else {
+        res = await api.get(`/api/download?repo=${repo}&path=${file.path}`, { responseType: 'blob' });
+      }
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement('a');
       a.href = url;
@@ -431,18 +456,62 @@ export default function RepoPage() {
     let completed = 0;
     let failed = 0;
 
-    setUploadProgress({ status: 'active', currentFile: fileList[0].name, completedCount: 0, totalCount: total, failedCount: 0 });
+    // Calculate total bytes for overall percentage
+    const totalBytes = fileList.reduce((sum, f) => sum + f.size, 0);
+    let uploadedBytes = 0;
+
+    setUploadProgress({ status: 'active', currentFile: fileList[0].name, completedCount: 0, totalCount: total, failedCount: 0, percent: 0 });
+
+    const CHUNK_SIZE = 80 * 1024 * 1024;
+
+    const trackProgress = (file) => ({
+      onUploadProgress: (e) => {
+        const currentPercent = ((uploadedBytes + e.loaded) / totalBytes) * 100;
+        setUploadProgress((prev) => ({ ...prev, percent: Math.min(currentPercent, 99.9) }));
+      },
+    });
 
     for (const file of fileList) {
       setUploadProgress((prev) => ({ ...prev, currentFile: file.name }));
 
-      const formData = new FormData();
-      formData.append('repo', repo);
-      if (uploadingFolder) formData.append('path', uploadingFolder);
-      formData.append('files', file);
-
       try {
-        await api.post('/api/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+        if (file.size > CHUNK_SIZE) {
+          // Large file: upload in chunks
+          const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+          for (let i = 0; i < totalChunks; i++) {
+            setUploadProgress((prev) => ({ ...prev, currentFile: `${file.name} (chunk ${i + 1}/${totalChunks})` }));
+            const start = i * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, file.size);
+            const chunkBlob = file.slice(start, end);
+            const chunkSize = end - start;
+
+            const formData = new FormData();
+            formData.append('chunk', chunkBlob, `${file.name}.chunk.${String(i + 1).padStart(3, '0')}`);
+            formData.append('repo', repo);
+            formData.append('path', uploadingFolder || '');
+            formData.append('chunkIndex', i);
+            formData.append('totalChunks', totalChunks);
+            formData.append('fileName', file.name);
+            formData.append('totalSize', file.size);
+
+            await api.post('/api/upload-chunk', formData, {
+              headers: { 'Content-Type': 'multipart/form-data' },
+              ...trackProgress(file),
+            });
+            uploadedBytes += chunkSize;
+          }
+        } else {
+          // Normal file
+          const formData = new FormData();
+          formData.append('repo', repo);
+          if (uploadingFolder) formData.append('path', uploadingFolder);
+          formData.append('files', file);
+          await api.post('/api/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            ...trackProgress(file),
+          });
+          uploadedBytes += file.size;
+        }
         completed++;
       } catch {
         failed++;
@@ -455,6 +524,7 @@ export default function RepoPage() {
       ...prev,
       status: failed === total ? 'error' : failed > 0 ? 'error' : 'success',
       currentFile: '',
+      percent: 100,
     }));
 
     // Refresh contents
@@ -535,9 +605,39 @@ export default function RepoPage() {
     showToast('Link copied to clipboard!', 'success');
   };
 
+  // ── Process chunked files: hide chunks, show manifests as virtual files ──
+  const processedContents = (() => {
+    const manifests = contents.filter((item) => item.name.endsWith('.manifest.json'));
+    const chunkPattern = /\.chunk\.\d{3}$/;
+    const manifestNames = new Set(manifests.map((m) => m.name.replace('.manifest.json', '')));
+
+    // Filter out raw chunks and manifest files
+    const regular = contents.filter((item) =>
+      !chunkPattern.test(item.name) && !item.name.endsWith('.manifest.json')
+    );
+
+    // Create virtual entries for chunked files from manifests
+    const virtualEntries = manifests.map((manifest) => {
+      const originalName = manifest.name.replace('.manifest.json', '');
+      // Count matching chunks to estimate size
+      const chunks = contents.filter((item) => item.name.startsWith(originalName + '.chunk.'));
+      const totalSize = chunks.reduce((sum, c) => sum + (c.size || 0), 0);
+      return {
+        ...manifest,
+        name: originalName,
+        size: totalSize,
+        _isChunked: true,
+        _manifestPath: manifest.path,
+        _originalManifestName: manifest.name,
+      };
+    });
+
+    return [...regular, ...virtualEntries];
+  })();
+
   // ── Filter + categorize contents ──
   const q = filterQuery.toLowerCase();
-  const filtered = q ? contents.filter((item) => item.name.toLowerCase().includes(q)) : contents;
+  const filtered = q ? processedContents.filter((item) => item.name.toLowerCase().includes(q)) : processedContents;
 
   const folders = filtered.filter((item) => item.type === 'dir');
   const imageFiles = filtered.filter((item) => item.type !== 'dir' && item.name.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i));

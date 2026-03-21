@@ -7,7 +7,7 @@ import Navbar from '@/components/Navbar';
 import Toast from '@/components/Toast';
 import Modal from '@/components/Modal';
 
-const MAX_FILE_SIZE = 25 * 1024 * 1024;
+const CHUNK_SIZE = 80 * 1024 * 1024; // 80 MB chunks for large files
 
 function validateRepoName(name) {
   if (!name.trim()) return 'Repository name is required';
@@ -164,8 +164,12 @@ export default function DashboardPage() {
       try {
         const userRes = await api.get('/api/user');
         setUser(userRes.data);
-        const repoRes = await api.get('/api/repos');
-        setRepos(repoRes.data);
+        const [repoRes, overflowRes] = await Promise.all([
+          api.get('/api/repos'),
+          api.get('/api/overflow-repos').catch(() => ({ data: [] })),
+        ]);
+        const overflowNames = new Set(overflowRes.data);
+        setRepos(repoRes.data.filter((r) => !overflowNames.has(r.name)));
         setLoading(false);
       } catch (err) {
         console.error('Error fetching user or repos:', err.message);
@@ -207,12 +211,6 @@ export default function DashboardPage() {
   };
 
   const processFiles = (files) => {
-    const oversized = files.filter((f) => f.size > MAX_FILE_SIZE);
-    if (oversized.length > 0) {
-      const names = oversized.map((f) => f.name).join(', ');
-      showToast(`Files too large (max 25 MB): ${names}`, 'error');
-      return;
-    }
     setFileList(files);
   };
 
@@ -225,16 +223,45 @@ export default function DashboardPage() {
       showToast('Select a repository first', 'warning');
       return;
     }
-    const formData = new FormData();
-    for (const f of fileList) formData.append('files', f);
-    formData.append('repo', selectedRepo);
-    formData.append('path', '');
-    if (commitMessage.trim()) formData.append('commitMessage', commitMessage.trim());
 
     try {
       setIsUploading(true);
-      setUploadStatus('Uploading...');
-      await api.post('/api/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+
+      for (const file of fileList) {
+        if (file.size > CHUNK_SIZE) {
+          // Large file: upload in chunks
+          const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+          setUploadStatus(`Chunking ${file.name} (0/${totalChunks})...`);
+
+          for (let i = 0; i < totalChunks; i++) {
+            const start = i * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, file.size);
+            const chunkBlob = file.slice(start, end);
+
+            const formData = new FormData();
+            formData.append('chunk', chunkBlob, `${file.name}.chunk.${String(i + 1).padStart(3, '0')}`);
+            formData.append('repo', selectedRepo);
+            formData.append('path', '');
+            formData.append('chunkIndex', i);
+            formData.append('totalChunks', totalChunks);
+            formData.append('fileName', file.name);
+            formData.append('totalSize', file.size);
+
+            setUploadStatus(`Uploading ${file.name} chunk ${i + 1}/${totalChunks}...`);
+            await api.post('/api/upload-chunk', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+          }
+        } else {
+          // Normal file: use standard upload
+          setUploadStatus(`Uploading ${file.name}...`);
+          const formData = new FormData();
+          formData.append('files', file);
+          formData.append('repo', selectedRepo);
+          formData.append('path', '');
+          if (commitMessage.trim()) formData.append('commitMessage', commitMessage.trim());
+          await api.post('/api/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+        }
+      }
+
       setUploadStatus('');
       setFileList([]);
       setCommitMessage('');
@@ -606,7 +633,7 @@ export default function DashboardPage() {
                       <p className="text-sm text-zinc-300 mb-1">
                         {isDragging ? 'Drop files here' : 'Drag & drop files here, or click to browse'}
                       </p>
-                      <p className="text-xs text-zinc-600">Maximum 25 MB per file</p>
+                      <p className="text-xs text-zinc-600">No size limit — large files are auto-chunked</p>
                     </div>
 
                     {/* File list */}

@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 export default function ProgressToast({ state, onClose, action = 'upload' }) {
   const [show, setShow] = useState(false);
 
-  const { status, currentFile, completedCount, totalCount, failedCount } = state || {};
+  const { status, currentFile, completedCount, totalCount, failedCount, percent } = state || {};
 
   const labels = {
     upload: { active: 'Uploading files...', done: 'Upload complete!', failed: 'Upload failed', partial: 'Upload finished with errors', past: 'uploaded' },
@@ -112,21 +112,26 @@ export default function ProgressToast({ state, onClose, action = 'upload' }) {
         {/* Progress bar */}
         <div className="w-full h-1.5 bg-white/[0.06] rounded-full overflow-hidden mb-2">
           <div
-            className={`h-full rounded-full transition-all duration-500 ease-out ${barColor}`}
-            style={{ width: `${isSuccess ? 100 : progress}%` }}
+            className={`h-full rounded-full transition-all duration-300 ease-out ${barColor}`}
+            style={{ width: `${isSuccess ? 100 : (percent != null ? percent : progress)}%` }}
           />
         </div>
 
         {/* Status text */}
         <div className="flex items-center justify-between">
-          <p className="text-xs text-zinc-400 truncate max-w-[200px]">
+          <p className="text-xs text-zinc-400 truncate max-w-[180px]">
             {isActive && currentFile && currentFile}
             {isSuccess && `${completedCount} file${completedCount !== 1 ? 's' : ''} ${label.past}`}
             {isError && `${completedCount} ${label.past}, ${failedCount} failed`}
           </p>
-          <span className="text-xs text-zinc-500">
-            {completedCount}/{totalCount}
-          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            {isActive && percent != null && (
+              <span className="text-xs font-medium text-zinc-300">{Math.round(percent)}%</span>
+            )}
+            <span className="text-xs text-zinc-500">
+              {completedCount}/{totalCount}
+            </span>
+          </div>
         </div>
       </div>
     </div>

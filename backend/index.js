@@ -21,7 +21,9 @@ for (const key of REQUIRED_ENV) {
 
 const app = express();
 app.set('trust proxy', 1); // Trust first proxy (Render) — required for secure cookies behind HTTPS
-const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB per file
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB per file (uses Git Blobs API for >25 MB)
+const CHUNK_SIZE = 80 * 1024 * 1024; // 80 MB chunks for large file splitting
+const chunkedUpload = multer({ limits: { fileSize: CHUNK_SIZE + 5 * 1024 * 1024 } }); // slight buffer for encoding
 const upload = multer({ limits: { fileSize: MAX_FILE_SIZE } });
 const PORT = process.env.PORT || 5000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://gitcloud-r.onrender.com';
@@ -261,7 +263,140 @@ app.delete('/api/repos', auth.protect(), async (req, res) => {
   }
 });
 
+// ── Repo Groups (auto-spreading) ────────────────────────────────
+const REPO_SIZE_LIMIT = 900 * 1024 * 1024; // 900 MB soft limit before creating overflow repo
+
+// Helper: get current size of a repo in bytes
+async function getRepoSizeBytes(gh, repoName) {
+  try {
+    const headers = { Authorization: `Bearer ${gh.token}`, Accept: 'application/vnd.github.v3+json' };
+    const repoRes = await axios.get(`https://api.github.com/repos/${gh.username}/${repoName}`, { headers });
+    const branch = repoRes.data.default_branch;
+    const treeRes = await axios.get(
+      `https://api.github.com/repos/${gh.username}/${repoName}/git/trees/${branch}?recursive=1`,
+      { headers }
+    );
+    return (treeRes.data.tree || [])
+      .filter((item) => item.type === 'blob')
+      .reduce((sum, item) => sum + (item.size || 0), 0);
+  } catch {
+    return 0;
+  }
+}
+
+// Helper: find or create an overflow repo with enough space
+async function getTargetRepo(gh, primaryRepo, fileSize) {
+  const headers = { Authorization: `Bearer ${gh.token}`, Accept: 'application/vnd.github.v3+json' };
+
+  // Get all linked repos (primary + overflows)
+  const linked = db.prepare('SELECT linkedRepo, orderIndex FROM repo_groups WHERE username = ? AND primaryRepo = ? ORDER BY orderIndex')
+    .all(gh.username, primaryRepo);
+  const allRepos = [primaryRepo, ...linked.map((r) => r.linkedRepo)];
+
+  // Check each repo for space (start from the last one)
+  for (let i = allRepos.length - 1; i >= 0; i--) {
+    const size = await getRepoSizeBytes(gh, allRepos[i]);
+    if (size + fileSize < REPO_SIZE_LIMIT) {
+      return allRepos[i];
+    }
+  }
+
+  // All repos are full — create a new overflow repo
+  const nextIndex = allRepos.length;
+  const newRepoName = `${primaryRepo}-${nextIndex + 1}`;
+
+  // Check if primary repo is private
+  const primaryRes = await axios.get(`https://api.github.com/repos/${gh.username}/${primaryRepo}`, { headers });
+  const isPrivate = primaryRes.data.private;
+
+  // Create the overflow repo
+  await axios.post('https://api.github.com/user/repos', {
+    name: newRepoName,
+    private: isPrivate,
+    description: `Overflow storage for ${primaryRepo} (auto-created by GitCloud)`,
+    auto_init: true,
+  }, { headers });
+
+  // Register in repo_groups
+  db.prepare('INSERT OR IGNORE INTO repo_groups (username, primaryRepo, linkedRepo, orderIndex) VALUES (?, ?, ?, ?)')
+    .run(gh.username, primaryRepo, newRepoName, nextIndex);
+
+  return newRepoName;
+}
+
+// Get repo group info
+app.get('/api/repo-group', auth.protect(), (req, res) => {
+  const gh = requireGitHub(req, res);
+  if (!gh) return;
+
+  const { repo } = req.query;
+  if (!repo) return res.status(400).json({ error: 'repo is required' });
+
+  // Check if this repo is a primary or linked repo
+  const asLinked = db.prepare('SELECT primaryRepo FROM repo_groups WHERE username = ? AND linkedRepo = ?').get(gh.username, repo);
+  const primaryRepo = asLinked ? asLinked.primaryRepo : repo;
+
+  const linked = db.prepare('SELECT linkedRepo, orderIndex FROM repo_groups WHERE username = ? AND primaryRepo = ? ORDER BY orderIndex')
+    .all(gh.username, primaryRepo);
+
+  res.json({ primaryRepo, linkedRepos: linked.map((r) => r.linkedRepo) });
+});
+
+// Get all overflow repo names for a user (to hide from dashboard)
+app.get('/api/overflow-repos', auth.protect(), (req, res) => {
+  const gh = requireGitHub(req, res);
+  if (!gh) return;
+
+  const linked = db.prepare('SELECT linkedRepo FROM repo_groups WHERE username = ?').all(gh.username);
+  res.json(linked.map((r) => r.linkedRepo));
+});
+
 // ── File Upload ─────────────────────────────────────────────────
+// Helper: upload via Git Blobs API (supports up to 100 MB)
+async function uploadViaBlobsAPI(gh, repo, uploadPath, content, commitMsg) {
+  const headers = { Authorization: `Bearer ${gh.token}`, Accept: 'application/vnd.github.v3+json' };
+  const apiBase = `https://api.github.com/repos/${gh.username}/${repo}`;
+
+  // 1. Create blob
+  const blobRes = await axios.post(`${apiBase}/git/blobs`, {
+    content: content,
+    encoding: 'base64',
+  }, { headers });
+
+  // 2. Get latest commit SHA on default branch
+  const repoRes = await axios.get(apiBase, { headers });
+  const branch = repoRes.data.default_branch;
+  const refRes = await axios.get(`${apiBase}/git/ref/heads/${branch}`, { headers });
+  const latestCommitSha = refRes.data.object.sha;
+
+  // 3. Get the tree of the latest commit
+  const commitRes = await axios.get(`${apiBase}/git/commits/${latestCommitSha}`, { headers });
+  const baseTreeSha = commitRes.data.tree.sha;
+
+  // 4. Create new tree with the blob
+  const treeRes = await axios.post(`${apiBase}/git/trees`, {
+    base_tree: baseTreeSha,
+    tree: [{
+      path: uploadPath,
+      mode: '100644',
+      type: 'blob',
+      sha: blobRes.data.sha,
+    }],
+  }, { headers });
+
+  // 5. Create commit
+  const newCommitRes = await axios.post(`${apiBase}/git/commits`, {
+    message: commitMsg,
+    tree: treeRes.data.sha,
+    parents: [latestCommitSha],
+  }, { headers });
+
+  // 6. Update branch reference
+  await axios.patch(`${apiBase}/git/refs/heads/${branch}`, {
+    sha: newCommitRes.data.sha,
+  }, { headers });
+}
+
 app.post('/api/upload', auth.protect(), upload.array('files'), async (req, res) => {
   const gh = requireGitHub(req, res);
   if (!gh) return;
@@ -275,21 +410,123 @@ app.post('/api/upload', auth.protect(), upload.array('files'), async (req, res) 
       const uploadPath = path ? `${path}/${file.originalname}` : file.originalname;
       const msg = commitMessage || `Upload ${file.originalname}`;
 
-      await axios.put(
-        `https://api.github.com/repos/${gh.username}/${repo}/contents/${uploadPath}`,
-        { message: msg, content },
-        {
-          headers: {
-            Authorization: `Bearer ${gh.token}`,
-            Accept: 'application/vnd.github.v3+json',
-          },
-        }
-      );
+      // Auto-overflow: find a repo with enough space
+      const targetRepo = await getTargetRepo(gh, repo, file.size);
+
+      if (file.size > 25 * 1024 * 1024) {
+        // Large file: use Git Blobs API (up to 100 MB)
+        await uploadViaBlobsAPI(gh, targetRepo, uploadPath, content, msg);
+      } else {
+        // Small file: use Contents API (simpler, up to 25 MB)
+        await axios.put(
+          `https://api.github.com/repos/${gh.username}/${targetRepo}/contents/${uploadPath}`,
+          { message: msg, content },
+          {
+            headers: {
+              Authorization: `Bearer ${gh.token}`,
+              Accept: 'application/vnd.github.v3+json',
+            },
+          }
+        );
+      }
     }
     res.json({ success: true });
   } catch (err) {
     console.error('Upload error:', err.response?.data || err.message);
     res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
+// ── Chunked Upload (for files > 100 MB) ─────────────────────────
+app.post('/api/upload-chunk', auth.protect(), chunkedUpload.single('chunk'), async (req, res) => {
+  const gh = requireGitHub(req, res);
+  if (!gh) return;
+
+  const { repo, path: uploadDir, chunkIndex, totalChunks, fileName, totalSize } = req.body;
+  const chunk = req.file;
+  if (!chunk || !repo || !fileName) {
+    return res.status(400).json({ error: 'chunk, repo, and fileName are required' });
+  }
+
+  try {
+    const chunkNum = String(Number(chunkIndex) + 1).padStart(3, '0');
+    const chunkName = `${fileName}.chunk.${chunkNum}`;
+    const chunkPath = uploadDir ? `${uploadDir}/${chunkName}` : chunkName;
+    const content = chunk.buffer.toString('base64');
+    const msg = `Upload chunk ${chunkNum}/${totalChunks} of ${fileName}`;
+
+    // Auto-overflow: find a repo with enough space for each chunk
+    const targetRepo = await getTargetRepo(gh, repo, chunk.size);
+
+    // Use Blobs API for all chunks (they can be up to 80 MB)
+    await uploadViaBlobsAPI(gh, targetRepo, chunkPath, content, msg);
+
+    // If this is the last chunk, create the manifest
+    if (Number(chunkIndex) === Number(totalChunks) - 1) {
+      const manifest = {
+        originalName: fileName,
+        totalSize: Number(totalSize),
+        totalChunks: Number(totalChunks),
+        chunkSize: CHUNK_SIZE,
+        createdAt: new Date().toISOString(),
+      };
+      const manifestPath = uploadDir ? `${uploadDir}/${fileName}.manifest.json` : `${fileName}.manifest.json`;
+      const manifestContent = Buffer.from(JSON.stringify(manifest, null, 2)).toString('base64');
+
+      await axios.put(
+        `https://api.github.com/repos/${gh.username}/${targetRepo}/contents/${manifestPath}`,
+        { message: `Upload manifest for ${fileName}`, content: manifestContent },
+        { headers: { Authorization: `Bearer ${gh.token}`, Accept: 'application/vnd.github.v3+json' } }
+      );
+    }
+
+    res.json({ success: true, chunk: Number(chunkIndex) + 1, total: Number(totalChunks) });
+  } catch (err) {
+    console.error('Chunk upload error:', err.response?.data || err.message);
+    res.status(500).json({ error: `Failed to upload chunk ${Number(chunkIndex) + 1}` });
+  }
+});
+
+// ── Chunked Download (reassemble chunks and stream) ─────────────
+app.get('/api/download-chunked', auth.protect(), async (req, res) => {
+  const gh = requireGitHub(req, res);
+  if (!gh) return;
+
+  const { repo, manifestPath } = req.query;
+  if (!repo || !manifestPath) return res.status(400).json({ error: 'repo and manifestPath are required' });
+
+  const headers = { Authorization: `Bearer ${gh.token}`, Accept: 'application/vnd.github.v3+json' };
+  const apiBase = `https://api.github.com/repos/${gh.username}/${repo}`;
+
+  try {
+    // 1. Fetch manifest
+    const manifestRes = await axios.get(`${apiBase}/contents/${manifestPath}`, { headers });
+    const manifest = JSON.parse(Buffer.from(manifestRes.data.content, 'base64').toString('utf-8'));
+
+    const dir = manifestPath.includes('/') ? manifestPath.substring(0, manifestPath.lastIndexOf('/')) : '';
+
+    res.set('Content-Disposition', `attachment; filename="${manifest.originalName}"`);
+    res.set('Content-Type', 'application/octet-stream');
+    res.set('Content-Length', manifest.totalSize);
+
+    // 2. Stream chunks sequentially
+    for (let i = 1; i <= manifest.totalChunks; i++) {
+      const chunkNum = String(i).padStart(3, '0');
+      const chunkName = `${manifest.originalName}.chunk.${chunkNum}`;
+      const chunkPath = dir ? `${dir}/${chunkName}` : chunkName;
+
+      const chunkRes = await axios.get(`${apiBase}/contents/${chunkPath}`, {
+        headers: { ...headers, Accept: 'application/vnd.github.v3.raw' },
+        responseType: 'arraybuffer',
+      });
+      res.write(Buffer.from(chunkRes.data));
+    }
+    res.end();
+  } catch (err) {
+    console.error('Chunked download error:', err.response?.data || err.message);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to download chunked file' });
+    }
   }
 });
 
@@ -600,16 +837,31 @@ app.get('/api/contents', auth.protect(), async (req, res) => {
   if (!gh) return;
 
   const { repo, path: repoPath = '' } = req.query;
+  const headers = { Authorization: `Bearer ${gh.token}`, Accept: 'application/vnd.github.v3+json' };
 
   try {
+    // Fetch contents from primary repo
     const githubUrl = `https://api.github.com/repos/${gh.username}/${repo}/contents/${repoPath}`;
-    const response = await axios.get(githubUrl, {
-      headers: {
-        Authorization: `Bearer ${gh.token}`,
-        Accept: 'application/vnd.github.v3+json'
+    const response = await axios.get(githubUrl, { headers });
+    let allContents = Array.isArray(response.data) ? response.data : [response.data];
+
+    // Also fetch from overflow repos
+    const linked = db.prepare('SELECT linkedRepo FROM repo_groups WHERE username = ? AND primaryRepo = ? ORDER BY orderIndex')
+      .all(gh.username, repo);
+
+    for (const { linkedRepo } of linked) {
+      try {
+        const overflowUrl = `https://api.github.com/repos/${gh.username}/${linkedRepo}/contents/${repoPath}`;
+        const overflowRes = await axios.get(overflowUrl, { headers });
+        const overflowData = Array.isArray(overflowRes.data) ? overflowRes.data : [overflowRes.data];
+        // Tag overflow items with source repo
+        allContents = allContents.concat(overflowData.map((item) => ({ ...item, _sourceRepo: linkedRepo })));
+      } catch {
+        // Overflow repo might not have this path — skip
       }
-    });
-    res.json(response.data);
+    }
+
+    res.json(allContents);
   } catch (err) {
     console.error('GitHub API error:', err.response?.data || err.message);
     res.status(500).json({ error: 'Failed to fetch repo contents' });
