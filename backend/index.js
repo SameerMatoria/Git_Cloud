@@ -521,23 +521,33 @@ app.get('/api/download-chunked', auth.protect(), async (req, res) => {
     res.set('Content-Type', 'application/octet-stream');
     res.set('Content-Length', manifest.totalSize);
 
-    // 2. Stream chunks sequentially
+    // 2. Fetch and stream each chunk using download_url
     for (let i = 1; i <= manifest.totalChunks; i++) {
       const chunkNum = String(i).padStart(3, '0');
       const chunkName = `${manifest.originalName}.chunk.${chunkNum}`;
       const chunkPath = dir ? `${dir}/${chunkName}` : chunkName;
 
-      const chunkRes = await axios.get(`${apiBase}/contents/${chunkPath}`, {
-        headers: { ...headers, Accept: 'application/vnd.github.v3.raw' },
-        responseType: 'arraybuffer',
-      });
-      res.write(Buffer.from(chunkRes.data));
+      // Get chunk metadata to find download_url
+      const metaRes = await axios.get(`${apiBase}/contents/${chunkPath}`, { headers });
+      const downloadUrl = metaRes.data.download_url;
+
+      if (downloadUrl) {
+        const chunkRes = await axios.get(downloadUrl, {
+          responseType: 'arraybuffer',
+          headers: { Authorization: `Bearer ${gh.token}` },
+        });
+        res.write(Buffer.from(chunkRes.data));
+      } else {
+        // Fallback: use Blobs API
+        const blobRes = await axios.get(`${apiBase}/git/blobs/${metaRes.data.sha}`, { headers });
+        res.write(Buffer.from(blobRes.data.content, 'base64'));
+      }
     }
     res.end();
   } catch (err) {
-    console.error('Chunked download error:', err.response?.data || err.message);
+    console.error('Chunked download error:', err.response?.status, err.response?.data || err.message);
     if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed to download chunked file' });
+      res.status(500).json({ error: 'Failed to download chunked file', details: err.response?.data?.message || err.message });
     }
   }
 });

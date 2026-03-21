@@ -740,7 +740,7 @@ export default function RepoPage() {
   };
 
   // Find the active menu item from all content
-  const activeMenuItem = activeMenu ? contents.find((c) => c.sha === activeMenu) : null;
+  const activeMenuItem = activeMenu ? processedContents.find((c) => c.sha === activeMenu) : null;
 
   // ── Section header ──
   const SectionHeader = ({ icon, title, count, children }) => (
@@ -812,7 +812,7 @@ export default function RepoPage() {
         content={codePreview.content}
         loading={codePreview.loading}
         onDownload={() => {
-          const item = contents.find((c) => c.name === codePreview.fileName);
+          const item = processedContents.find((c) => c.name === codePreview.fileName);
           if (item) handleDownload(item);
         }}
       />
