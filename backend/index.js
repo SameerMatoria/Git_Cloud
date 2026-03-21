@@ -53,7 +53,7 @@ const auth = new AuthSnap({
     github: {
       clientId: process.env.GITHUB_CLIENT_ID,
       clientSecret: process.env.GITHUB_CLIENT_SECRET,
-      scopes: ['repo', 'user:email'],
+      scopes: ['repo', 'user:email', 'delete_repo'],
       callbackURL: process.env.GITHUB_CALLBACK_URL,
     }
   },
@@ -555,6 +555,42 @@ app.get('/api/search', auth.protect(), async (req, res) => {
   } catch (err) {
     console.error('Search error:', err.response?.data || err.message);
     res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+// ── Repo Actual Size (sum of current files, not git history) ────
+app.get('/api/repo-size', auth.protect(), async (req, res) => {
+  const gh = requireGitHub(req, res);
+  if (!gh) return;
+
+  const { repo } = req.query;
+  if (!repo) return res.status(400).json({ error: 'repo is required' });
+
+  try {
+    // Get default branch first
+    const repoRes = await axios.get(`https://api.github.com/repos/${gh.username}/${repo}`, {
+      headers: { Authorization: `Bearer ${gh.token}`, Accept: 'application/vnd.github.v3+json' },
+    });
+    const branch = repoRes.data.default_branch;
+
+    // Get full tree recursively
+    const treeRes = await axios.get(
+      `https://api.github.com/repos/${gh.username}/${repo}/git/trees/${branch}?recursive=1`,
+      { headers: { Authorization: `Bearer ${gh.token}`, Accept: 'application/vnd.github.v3+json' } }
+    );
+
+    const totalBytes = (treeRes.data.tree || [])
+      .filter((item) => item.type === 'blob')
+      .reduce((sum, item) => sum + (item.size || 0), 0);
+
+    res.json({ repo, sizeBytes: totalBytes });
+  } catch (err) {
+    // Empty repo or no commits — size is 0
+    if (err.response?.status === 409 || err.response?.status === 404) {
+      return res.json({ repo, sizeBytes: 0 });
+    }
+    console.error('Repo size error:', err.response?.data || err.message);
+    res.status(500).json({ error: 'Failed to calculate repo size' });
   }
 });
 

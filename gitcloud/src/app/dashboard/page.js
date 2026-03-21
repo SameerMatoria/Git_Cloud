@@ -124,6 +124,10 @@ export default function DashboardPage() {
   // Active tab
   const [activeTab, setActiveTab] = useState('repos'); // 'repos' | 'upload' | 'search' | 'storage'
 
+  // Actual repo sizes (from current files, not git history)
+  const [repoSizes, setRepoSizes] = useState({}); // { repoName: sizeInBytes }
+  const [sizesLoading, setSizesLoading] = useState(false);
+
   // Modal state
   const [modal, setModal] = useState({ open: false, title: '', message: '', onConfirm: null, confirmText: 'Confirm', confirmStyle: 'danger' });
   const openModal = (title, message, onConfirm, confirmText = 'Delete', confirmStyle = 'danger') => {
@@ -170,6 +174,24 @@ export default function DashboardPage() {
     };
     fetchUserAndRepos();
   }, []);
+
+  // Fetch actual file sizes when storage tab is opened
+  useEffect(() => {
+    if (activeTab !== 'storage' || repos.length === 0) return;
+    setSizesLoading(true);
+    Promise.all(
+      repos.map((repo) =>
+        api.get(`/api/repo-size?repo=${repo.name}`)
+          .then((res) => ({ name: repo.name, size: res.data.sizeBytes }))
+          .catch(() => ({ name: repo.name, size: 0 }))
+      )
+    ).then((results) => {
+      const sizes = {};
+      results.forEach((r) => { sizes[r.name] = r.size; });
+      setRepoSizes(sizes);
+      setSizesLoading(false);
+    });
+  }, [activeTab, repos]);
 
   // Drag and drop handlers
   const handleDragOver = (e) => { e.preventDefault(); setIsDragging(true); };
@@ -280,8 +302,8 @@ export default function DashboardPage() {
   const publicRepos = repos.filter((r) => !r.private).length;
   const privateRepos = repos.filter((r) => r.private).length;
   const totalStars = repos.reduce((sum, r) => sum + (r.stargazers_count || 0), 0);
-  const totalStorageKB = repos.reduce((sum, r) => sum + (r.size || 0), 0);
-  const sortedBySize = [...repos].sort((a, b) => (b.size || 0) - (a.size || 0));
+  const totalStorageBytes = repos.reduce((sum, r) => sum + (repoSizes[r.name] ?? r.size * 1024), 0);
+  const sortedBySize = [...repos].sort((a, b) => (repoSizes[a.name] ?? a.size * 1024) - (repoSizes[b.name] ?? b.size * 1024)).reverse();
 
   if (loading) {
     return (
@@ -743,7 +765,7 @@ export default function DashboardPage() {
                 <div className="mb-6">
                   <h2 className="text-2xl font-bold">Storage</h2>
                   <p className="text-zinc-500 text-sm mt-1">
-                    {formatBytes(totalStorageKB * 1024)} used across {repos.length} folder{repos.length !== 1 ? 's' : ''}
+                    {formatBytes(totalStorageBytes)} used across {repos.length} folder{repos.length !== 1 ? 's' : ''}
                   </p>
                 </div>
 
@@ -754,7 +776,7 @@ export default function DashboardPage() {
                       {Icons.storage}
                     </div>
                     <div>
-                      <p className="text-2xl font-bold">{formatBytes(totalStorageKB * 1024)}</p>
+                      <p className="text-2xl font-bold">{sizesLoading ? '...' : formatBytes(totalStorageBytes)}</p>
                       <p className="text-xs text-zinc-500">Total storage used</p>
                     </div>
                   </div>
@@ -771,8 +793,8 @@ export default function DashboardPage() {
                 ) : (
                   <div className="space-y-2 stagger-children">
                     {sortedBySize.map((repo) => {
-                      const sizeKB = repo.size || 0;
-                      const pct = totalStorageKB > 0 ? ((sizeKB / totalStorageKB) * 100).toFixed(1) : 0;
+                      const sizeBytes = repoSizes[repo.name] ?? repo.size * 1024;
+                      const pct = totalStorageBytes > 0 ? ((sizeBytes / totalStorageBytes) * 100).toFixed(1) : 0;
                       return (
                         <div
                           key={repo.id}
@@ -793,7 +815,7 @@ export default function DashboardPage() {
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
                               <span className="text-xs text-zinc-500">{pct}%</span>
-                              <span className="text-sm font-medium text-zinc-300 w-20 text-right">{formatBytes(sizeKB * 1024)}</span>
+                              <span className="text-sm font-medium text-zinc-300 w-20 text-right">{formatBytes(sizeBytes)}</span>
                             </div>
                           </div>
                           <div className="w-full h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
