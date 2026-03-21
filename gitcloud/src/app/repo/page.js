@@ -277,7 +277,7 @@ export default function RepoPage() {
 
           for (const chunk of relatedFiles) {
             try {
-              await api.delete('/api/delete-file', { data: { repo, path: chunk.path, sha: chunk.sha } });
+              await api.delete('/api/delete-file', { data: { repo: chunk._sourceRepo || repo, path: chunk.path, sha: chunk.sha } });
               completed++;
             } catch { failed++; }
             setDeleteProgress((prev) => ({ ...prev, completedCount: completed, failedCount: failed }));
@@ -286,7 +286,7 @@ export default function RepoPage() {
         } else {
           setDeleteProgress({ status: 'active', currentFile: file.name, completedCount: 0, totalCount: 1, failedCount: 0 });
           try {
-            await api.delete('/api/delete-file', { data: { repo, path: file.path, sha: file.sha } });
+            await api.delete('/api/delete-file', { data: { repo: file._sourceRepo || repo, path: file.path, sha: file.sha } });
             setDeleteProgress({ status: 'success', currentFile: '', completedCount: 1, totalCount: 1, failedCount: 0 });
           } catch (err) {
             setDeleteProgress({ status: 'error', currentFile: '', completedCount: 0, totalCount: 1, failedCount: 1 });
@@ -334,7 +334,7 @@ export default function RepoPage() {
         for (const file of toDelete) {
           setDeleteProgress((prev) => ({ ...prev, currentFile: file.name }));
           try {
-            await api.delete('/api/delete-file', { data: { repo, path: file.path, sha: file.sha } });
+            await api.delete('/api/delete-file', { data: { repo: file._sourceRepo || repo, path: file.path, sha: file.sha } });
             completed++;
           } catch {
             failed++;
@@ -387,7 +387,7 @@ export default function RepoPage() {
       `Are you sure you want to delete "${folder.name}" and all its contents? This cannot be undone.`,
       async () => {
         try {
-          await api.delete('/api/delete-folder', { data: { repo, path: folder.path } });
+          await api.delete('/api/delete-folder', { data: { repo: folder._sourceRepo || repo, path: folder.path } });
           showToast(`Folder "${folder.name}" deleted!`, 'success');
           const updated = await api.get(`/api/contents?repo=${repo}&path=${path}`);
           setContents(Array.isArray(updated.data) ? updated.data : []);
@@ -405,7 +405,7 @@ export default function RepoPage() {
       let res;
       if (file._isChunked) {
         // Chunked file: use chunked download endpoint
-        res = await api.get(`/api/download-chunked?repo=${repo}&manifestPath=${encodeURIComponent(file._manifestPath)}`, { responseType: 'blob' });
+        res = await api.get(`/api/download-chunked?repo=${file._sourceRepo || repo}&manifestPath=${encodeURIComponent(file._manifestPath)}`, { responseType: 'blob' });
       } else if (file.download_url) {
         // Use GitHub's direct download URL (works for both public & private repos)
         res = await axios.get(file.download_url, { responseType: 'blob' });
@@ -442,7 +442,7 @@ export default function RepoPage() {
     const newPath = parts.join('/');
 
     try {
-      await api.put('/api/rename-file', { repo, oldPath, newPath });
+      await api.put('/api/rename-file', { repo: renamingFile._sourceRepo || repo, oldPath, newPath });
       showToast(`Renamed to "${newFileName.trim()}"`, 'success');
       setRenamingFile(null);
       const updated = await api.get(`/api/contents?repo=${repo}&path=${path}`);
