@@ -212,7 +212,12 @@ app.get('/api/repos', auth.protect(), async (req, res) => {
       if (repoRes.data.length < 100) break;
       page++;
     }
-    res.json(allRepos);
+    // Hide overflow repos from dashboard (they're internal)
+    const overflowRepos = new Set(
+      db.prepare('SELECT linkedRepo FROM repo_groups WHERE username = ?').all(gh.username).map((r) => r.linkedRepo)
+    );
+    const visible = allRepos.filter((r) => !overflowRepos.has(r.name));
+    res.json(visible);
   } catch (err) {
     console.error('Failed to fetch repos:', err.message);
     res.status(500).json({ error: 'GitHub repo fetch failed' });
