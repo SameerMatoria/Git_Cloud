@@ -307,8 +307,6 @@ export default function RepoPage() {
     });
   };
 
-  const allFiles = processedContents.filter((item) => item.type !== 'dir');
-
   const toggleSelectAll = () => {
     if (selectedFiles.size === allFiles.length) {
       setSelectedFiles(new Set());
@@ -672,6 +670,8 @@ export default function RepoPage() {
 
     return [...regular, ...virtualEntries];
   })();
+
+  const allFiles = processedContents.filter((item) => item.type !== 'dir');
 
   // ── Filter + categorize contents ──
   const q = filterQuery.toLowerCase();
