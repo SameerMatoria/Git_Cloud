@@ -7,6 +7,7 @@ import api from '@/lib/api';
 import Navbar from '@/components/Navbar';
 import Modal from '@/components/Modal';
 import Toast from '@/components/Toast';
+import UploadProgressToast from '@/components/UploadProgressToast';
 import CodePreviewModal from '@/components/CodePreviewModal';
 
 // ── Icons ──────────────────────────────────────────────────────
@@ -196,6 +197,10 @@ export default function RepoPage() {
   const hideToast = useCallback(() => {
     setToast((prev) => ({ ...prev, visible: false }));
   }, []);
+
+  // Upload progress state
+  const [uploadProgress, setUploadProgress] = useState(null);
+  const clearUploadProgress = useCallback(() => setUploadProgress(null), []);
 
   // Fetch data
   useEffect(() => {
@@ -399,26 +404,45 @@ export default function RepoPage() {
     const files = e.target.files;
     if (!files || files.length === 0 || uploadingFolder === null) return;
 
-    const formData = new FormData();
-    formData.append('repo', repo);
-    if (uploadingFolder) formData.append('path', uploadingFolder);
-    for (const file of files) {
+    const fileList = Array.from(files);
+    const total = fileList.length;
+    let completed = 0;
+    let failed = 0;
+
+    setUploadProgress({ status: 'uploading', currentFile: fileList[0].name, completedCount: 0, totalCount: total, failedCount: 0 });
+
+    for (const file of fileList) {
+      setUploadProgress((prev) => ({ ...prev, currentFile: file.name }));
+
+      const formData = new FormData();
+      formData.append('repo', repo);
+      if (uploadingFolder) formData.append('path', uploadingFolder);
       formData.append('files', file);
+
+      try {
+        await api.post('/api/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+        completed++;
+      } catch {
+        failed++;
+      }
+
+      setUploadProgress((prev) => ({ ...prev, completedCount: completed, failedCount: failed }));
     }
 
+    setUploadProgress((prev) => ({
+      ...prev,
+      status: failed === total ? 'error' : failed > 0 ? 'error' : 'success',
+      currentFile: '',
+    }));
+
+    // Refresh contents
     try {
-      showToast('Uploading...', 'info');
-      await api.post('/api/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-      showToast(`Files uploaded to folder!`, 'success');
-      // Refresh contents
       const updated = await api.get(`/api/contents?repo=${repo}&path=${path}`);
       setContents(Array.isArray(updated.data) ? updated.data : []);
-    } catch (err) {
-      showToast(err.response?.data?.error || 'Upload failed', 'error');
-    } finally {
-      setUploadingFolder(null);
-      if (folderUploadRef.current) folderUploadRef.current.value = '';
-    }
+    } catch {}
+
+    setUploadingFolder(null);
+    if (folderUploadRef.current) folderUploadRef.current.value = '';
   };
 
   const getRawUrl = (item) =>
@@ -596,6 +620,7 @@ export default function RepoPage() {
       <Modal isOpen={modal.open} onClose={closeModal} onConfirm={modal.onConfirm}
         title={modal.title} message={modal.message} confirmText={modal.confirmText} confirmStyle={modal.confirmStyle} />
       <Toast message={toast.message} type={toast.type} isVisible={toast.visible} onClose={hideToast} />
+      <UploadProgressToast uploadState={uploadProgress} onClose={clearUploadProgress} />
 
       {/* Hidden file input for folder uploads */}
       <input type="file" ref={folderUploadRef} multiple className="hidden" onChange={handleFolderUpload} />
