@@ -307,7 +307,7 @@ export default function RepoPage() {
     });
   };
 
-  const allFiles = contents.filter((item) => item.type !== 'dir');
+  const allFiles = processedContents.filter((item) => item.type !== 'dir');
 
   const toggleSelectAll = () => {
     if (selectedFiles.size === allFiles.length) {
@@ -336,6 +336,7 @@ export default function RepoPage() {
           try {
             await api.delete('/api/delete-file', { data: { repo: file._sourceRepo || repo, path: file.path, sha: file.sha } });
             completed++;
+            setSelectedFiles((prev) => { const next = new Set(prev); next.delete(file.sha); return next; });
           } catch {
             failed++;
           }
@@ -575,7 +576,7 @@ export default function RepoPage() {
   };
 
   const getRawUrl = (item) =>
-    `https://raw.githubusercontent.com/${username}/${repo}/${defaultBranch}/${item.path}`;
+    item.download_url || `https://raw.githubusercontent.com/${username}/${item._sourceRepo || repo}/${defaultBranch}/${item.path}`;
 
   const openPdfViewer = async (item) => {
     setPdfModal({ open: true, url: null, name: item.name, loading: true });
@@ -1137,7 +1138,7 @@ export default function RepoPage() {
         )}
 
         {/* ── No filter results ── */}
-        {!loading && contents.length > 0 && filtered.length === 0 && (
+        {!loading && filterQuery && contents.length > 0 && filtered.length === 0 && (
           <div className="text-center py-20 animate-fade-in">
             <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-white/[0.04] flex items-center justify-center text-zinc-600">
               {Icons.search}
@@ -1522,11 +1523,11 @@ export default function RepoPage() {
         )}
       </div>
       {/* ── Floating Selection Bar ── */}
-      {selectedFiles.size > 0 && (
+      {(() => { const validSelected = allFiles.filter((f) => selectedFiles.has(f.sha)).length; return validSelected > 0 ? (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-slide-up">
           <div className="flex items-center gap-3 px-5 py-3 bg-zinc-900/95 backdrop-blur-xl border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/50">
             <span className="text-sm text-zinc-300 font-medium">
-              {selectedFiles.size} selected
+              {validSelected} selected
             </span>
             <div className="w-px h-5 bg-white/[0.1]" />
             <button
@@ -1543,7 +1544,7 @@ export default function RepoPage() {
             </button>
           </div>
         </div>
-      )}
+      ) : null; })()}
     </div>
   );
 }

@@ -305,8 +305,8 @@ async function getTargetRepo(gh, primaryRepo, fileSize) {
     .all(gh.username, primaryRepo);
   const allRepos = [primaryRepo, ...linked.map((r) => r.linkedRepo)];
 
-  // Check each repo for space (start from the last one)
-  for (let i = allRepos.length - 1; i >= 0; i--) {
+  // Check each repo for space (start from the primary, fill it first)
+  for (let i = 0; i < allRepos.length; i++) {
     const size = await getRepoSizeBytes(gh, allRepos[i]);
     if (size + fileSize < REPO_SIZE_LIMIT) {
       return allRepos[i];
