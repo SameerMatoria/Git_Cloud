@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
-import api from '@/lib/api';
+import api, { directApi } from '@/lib/api';
 import Navbar from '@/components/Navbar';
 import Modal from '@/components/Modal';
 import Toast from '@/components/Toast';
@@ -457,21 +457,28 @@ export default function RepoPage() {
     let failed = 0;
 
     // Calculate total bytes for overall percentage
+    // Each file counts twice: once for HTTP upload (50%), once for server processing (50%)
     const totalBytes = fileList.reduce((sum, f) => sum + f.size, 0);
-    let uploadedBytes = 0;
+    let completedBytes = 0; // bytes fully done (uploaded + processed by server)
+    let lastReportedPercent = 0;
 
     setUploadProgress({ status: 'active', currentFile: fileList[0].name, completedCount: 0, totalCount: total, failedCount: 0, percent: 0 });
 
     const CHUNK_SIZE = 80 * 1024 * 1024;
 
-    const trackProgress = (file) => ({
+    const trackProgress = (fileIndex, fileSize) => ({
       onUploadProgress: (e) => {
-        const currentPercent = ((uploadedBytes + e.loaded) / totalBytes) * 100;
-        setUploadProgress((prev) => ({ ...prev, percent: Math.min(currentPercent, 99.9) }));
+        // HTTP upload = first half of progress for this file's portion
+        const httpProgress = (e.loaded / e.total) * fileSize * 0.5;
+        const currentPercent = ((completedBytes + httpProgress) / totalBytes) * 100;
+        const clamped = Math.min(Math.max(currentPercent, lastReportedPercent), 99.9);
+        lastReportedPercent = clamped;
+        setUploadProgress((prev) => ({ ...prev, percent: clamped }));
       },
     });
 
-    for (const file of fileList) {
+    for (let fi = 0; fi < fileList.length; fi++) {
+      const file = fileList[fi];
       setUploadProgress((prev) => ({ ...prev, currentFile: file.name }));
 
       try {
@@ -494,11 +501,14 @@ export default function RepoPage() {
             formData.append('fileName', file.name);
             formData.append('totalSize', file.size);
 
-            await api.post('/api/upload-chunk', formData, {
+            await directApi.post('/api/upload-chunk', formData, {
               headers: { 'Content-Type': 'multipart/form-data' },
-              ...trackProgress(file),
+              ...trackProgress(fi, chunkSize),
             });
-            uploadedBytes += chunkSize;
+            // Server responded — this chunk is fully done
+            completedBytes += chunkSize;
+            lastReportedPercent = (completedBytes / totalBytes) * 100;
+            setUploadProgress((prev) => ({ ...prev, percent: Math.min(lastReportedPercent, 99.9) }));
           }
         } else {
           // Normal file
@@ -506,15 +516,19 @@ export default function RepoPage() {
           formData.append('repo', repo);
           if (uploadingFolder) formData.append('path', uploadingFolder);
           formData.append('files', file);
-          await api.post('/api/upload', formData, {
+          await directApi.post('/api/upload', formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
-            ...trackProgress(file),
+            ...trackProgress(fi, file.size),
           });
-          uploadedBytes += file.size;
+          // Server responded — file is fully done
+          completedBytes += file.size;
+          lastReportedPercent = (completedBytes / totalBytes) * 100;
+          setUploadProgress((prev) => ({ ...prev, percent: Math.min(lastReportedPercent, 99.9) }));
         }
         completed++;
       } catch {
         failed++;
+        completedBytes += file.size;
       }
 
       setUploadProgress((prev) => ({ ...prev, completedCount: completed, failedCount: failed }));

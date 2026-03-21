@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import api from '@/lib/api';
+import api, { directApi } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import Toast from '@/components/Toast';
@@ -248,7 +248,7 @@ export default function DashboardPage() {
             formData.append('totalSize', file.size);
 
             setUploadStatus(`Uploading ${file.name} chunk ${i + 1}/${totalChunks}...`);
-            await api.post('/api/upload-chunk', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+            await directApi.post('/api/upload-chunk', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
           }
         } else {
           // Normal file: use standard upload
@@ -258,7 +258,7 @@ export default function DashboardPage() {
           formData.append('repo', selectedRepo);
           formData.append('path', '');
           if (commitMessage.trim()) formData.append('commitMessage', commitMessage.trim());
-          await api.post('/api/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+          await directApi.post('/api/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
         }
       }
 

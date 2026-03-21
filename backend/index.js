@@ -118,6 +118,18 @@ app.use('/api/', apiLimiter);
 app.use('/api/upload', uploadLimiter);
 app.use('/auth/', authLimiter);
 
+// Allow auth via Authorization header (for direct backend calls that bypass the Next.js proxy)
+// Converts "Authorization: Bearer <jwt>" into the cookie header so AuthSnap picks it up
+app.use('/api/', (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    const existing = req.headers.cookie || '';
+    req.headers.cookie = existing ? `${existing}; authsnap_session=${token}` : `authsnap_session=${token}`;
+  }
+  next();
+});
+
 // Intercept AuthSnap's callback to pass the session JWT via URL instead of
 // relying on cross-origin cookies (which break on onrender.com subdomains).
 // The frontend sets the cookie on its own domain, then API calls go through
