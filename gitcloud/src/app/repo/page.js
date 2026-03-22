@@ -207,6 +207,10 @@ export default function RepoPage() {
   const [deleteProgress, setDeleteProgress] = useState(null);
   const clearDeleteProgress = useCallback(() => setDeleteProgress(null), []);
 
+  // Download progress state
+  const [downloadProgress, setDownloadProgress] = useState(null);
+  const clearDownloadProgress = useCallback(() => setDownloadProgress(null), []);
+
   // Fetch data
   useEffect(() => {
     if (!repo) return;
@@ -400,17 +404,26 @@ export default function RepoPage() {
   };
 
   const handleDownload = async (file) => {
+    setDownloadProgress({ status: 'active', currentFile: file.name, completedCount: 0, totalCount: 1, failedCount: 0, percent: 0 });
     try {
+      const onDownloadProgress = (e) => {
+        if (e.total) {
+          const pct = (e.loaded / e.total) * 100;
+          setDownloadProgress((prev) => ({ ...prev, percent: Math.min(pct, 99.9) }));
+        } else if (e.loaded) {
+          // No total available — show loaded bytes
+          const mb = (e.loaded / (1024 * 1024)).toFixed(1);
+          setDownloadProgress((prev) => ({ ...prev, currentFile: `${file.name} (${mb} MB)`, percent: null }));
+        }
+      };
+
       let res;
       if (file._isChunked) {
-        // Chunked file: use chunked download endpoint
-        res = await api.get(`/api/download-chunked?repo=${file._sourceRepo || repo}&manifestPath=${encodeURIComponent(file._manifestPath)}`, { responseType: 'blob' });
+        res = await api.get(`/api/download-chunked?repo=${file._sourceRepo || repo}&manifestPath=${encodeURIComponent(file._manifestPath)}`, { responseType: 'blob', onDownloadProgress });
       } else if (file.download_url) {
-        // Use GitHub's direct download URL (works for both public & private repos)
-        res = await axios.get(file.download_url, { responseType: 'blob' });
+        res = await axios.get(file.download_url, { responseType: 'blob', onDownloadProgress });
       } else {
-        // Fallback to backend proxy
-        res = await api.get(`/api/download?repo=${repo}&path=${file.path}`, { responseType: 'blob' });
+        res = await api.get(`/api/download?repo=${repo}&path=${file.path}`, { responseType: 'blob', onDownloadProgress });
       }
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement('a');
@@ -420,8 +433,9 @@ export default function RepoPage() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
+      setDownloadProgress({ status: 'success', currentFile: file.name, completedCount: 1, totalCount: 1, failedCount: 0, percent: 100 });
     } catch (err) {
-      showToast('Download failed', 'error');
+      setDownloadProgress({ status: 'error', currentFile: file.name, completedCount: 0, totalCount: 1, failedCount: 1, percent: 0 });
     }
   };
 
@@ -780,8 +794,11 @@ export default function RepoPage() {
       <Modal isOpen={modal.open} onClose={closeModal} onConfirm={modal.onConfirm}
         title={modal.title} message={modal.message} confirmText={modal.confirmText} confirmStyle={modal.confirmStyle} />
       <Toast message={toast.message} type={toast.type} isVisible={toast.visible} onClose={hideToast} />
-      <ProgressToast state={uploadProgress} onClose={clearUploadProgress} action="upload" />
-      {!uploadProgress && <ProgressToast state={deleteProgress} onClose={clearDeleteProgress} action="delete" />}
+      <ProgressToast toasts={[
+        uploadProgress && { id: 'upload', state: uploadProgress, onClose: clearUploadProgress, action: 'upload' },
+        deleteProgress && { id: 'delete', state: deleteProgress, onClose: clearDeleteProgress, action: 'delete' },
+        downloadProgress && { id: 'download', state: downloadProgress, onClose: clearDownloadProgress, action: 'download' },
+      ].filter(Boolean)} />
 
       {/* Hidden file input for folder uploads */}
       <input type="file" ref={folderUploadRef} multiple className="hidden" onChange={handleFolderUpload} />
