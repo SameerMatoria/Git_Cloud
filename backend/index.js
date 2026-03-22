@@ -889,9 +889,15 @@ app.get('/api/repo-size', auth.protect(), async (req, res) => {
       { headers: { Authorization: `Bearer ${gh.token}`, Accept: 'application/vnd.github.v3+json' } }
     );
 
-    const totalBytes = (treeRes.data.tree || [])
+    let totalBytes = (treeRes.data.tree || [])
       .filter((item) => item.type === 'blob')
       .reduce((sum, item) => sum + (item.size || 0), 0);
+
+    // Include overflow repo sizes
+    const overflowRepos = db.prepare('SELECT linkedRepo FROM repo_groups WHERE username = ? AND primaryRepo = ?').all(gh.username, repo);
+    for (const { linkedRepo } of overflowRepos) {
+      totalBytes += await getRepoSizeBytes(gh, linkedRepo);
+    }
 
     res.json({ repo, sizeBytes: totalBytes });
   } catch (err) {
