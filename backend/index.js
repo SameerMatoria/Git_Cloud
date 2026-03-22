@@ -212,11 +212,11 @@ app.get('/api/repos', auth.protect(), async (req, res) => {
       if (repoRes.data.length < 100) break;
       page++;
     }
-    // Hide overflow repos from dashboard (they're internal)
+    // Hide overflow repos from dashboard (they're internal) — case-insensitive
     const overflowRepos = new Set(
-      db.prepare('SELECT linkedRepo FROM repo_groups WHERE username = ?').all(gh.username).map((r) => r.linkedRepo)
+      db.prepare('SELECT linkedRepo FROM repo_groups WHERE username = ?').all(gh.username).map((r) => r.linkedRepo.toLowerCase())
     );
-    const visible = allRepos.filter((r) => !overflowRepos.has(r.name));
+    const visible = allRepos.filter((r) => !overflowRepos.has(r.name.toLowerCase()));
     res.json(visible);
   } catch (err) {
     console.error('Failed to fetch repos:', err.message);
@@ -305,8 +305,8 @@ async function getRepoSizeBytes(gh, repoName) {
 async function getTargetRepo(gh, primaryRepo, fileSize) {
   const headers = { Authorization: `Bearer ${gh.token}`, Accept: 'application/vnd.github.v3+json' };
 
-  // Get all linked repos (primary + overflows)
-  const linked = db.prepare('SELECT linkedRepo, orderIndex FROM repo_groups WHERE username = ? AND primaryRepo = ? ORDER BY orderIndex')
+  // Get all linked repos (primary + overflows) — case-insensitive
+  const linked = db.prepare('SELECT linkedRepo, orderIndex FROM repo_groups WHERE username = ? AND primaryRepo COLLATE NOCASE = ? ORDER BY orderIndex')
     .all(gh.username, primaryRepo);
   const allRepos = [primaryRepo, ...linked.map((r) => r.linkedRepo)];
 
@@ -893,9 +893,12 @@ app.get('/api/repo-size', auth.protect(), async (req, res) => {
       .filter((item) => item.type === 'blob')
       .reduce((sum, item) => sum + (item.size || 0), 0);
 
-    // Include overflow repo sizes
-    const overflowRepos = db.prepare('SELECT linkedRepo FROM repo_groups WHERE username = ? AND primaryRepo = ?').all(gh.username, repo);
-    for (const { linkedRepo } of overflowRepos) {
+    // Include overflow repo sizes (case-insensitive lookup)
+    const allGroups = db.prepare('SELECT primaryRepo, linkedRepo FROM repo_groups WHERE username = ?').all(gh.username);
+    const overflowRepos = allGroups
+      .filter((r) => r.primaryRepo.toLowerCase() === repo.toLowerCase())
+      .map((r) => r.linkedRepo);
+    for (const linkedRepo of overflowRepos) {
       totalBytes += await getRepoSizeBytes(gh, linkedRepo);
     }
 
@@ -924,8 +927,8 @@ app.get('/api/contents', auth.protect(), async (req, res) => {
     const response = await axios.get(githubUrl, { headers });
     let allContents = Array.isArray(response.data) ? response.data : [response.data];
 
-    // Also fetch from overflow repos
-    const linked = db.prepare('SELECT linkedRepo FROM repo_groups WHERE username = ? AND primaryRepo = ? ORDER BY orderIndex')
+    // Also fetch from overflow repos (case-insensitive)
+    const linked = db.prepare('SELECT linkedRepo FROM repo_groups WHERE username = ? AND primaryRepo COLLATE NOCASE = ? ORDER BY orderIndex')
       .all(gh.username, repo);
 
     for (const { linkedRepo } of linked) {
