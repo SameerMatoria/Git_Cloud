@@ -212,15 +212,27 @@ app.get('/api/repos', auth.protect(), async (req, res) => {
       if (repoRes.data.length < 100) break;
       page++;
     }
-    // Hide overflow repos from dashboard — by DB entry OR by description pattern
-    const overflowRepos = new Set(
+    // Auto-register untracked overflow repos into repo_groups by description pattern
+    const descPattern = /^Overflow storage for (.+) \(auto-created by GitCloud\)$/i;
+    const trackedOverflows = new Set(
       db.prepare('SELECT linkedRepo FROM repo_groups WHERE username = ?').all(gh.username).map((r) => r.linkedRepo.toLowerCase())
     );
-    const visible = allRepos.filter((r) => {
-      if (overflowRepos.has(r.name.toLowerCase())) return false;
-      if (r.description && r.description.match(/^Overflow storage for .+ \(auto-created by GitCloud\)$/i)) return false;
-      return true;
-    });
+    for (const r of allRepos) {
+      if (trackedOverflows.has(r.name.toLowerCase())) continue;
+      const match = r.description && r.description.match(descPattern);
+      if (match) {
+        const primaryRepo = match[1];
+        const existing = db.prepare('SELECT MAX(orderIndex) as maxIdx FROM repo_groups WHERE username = ? AND primaryRepo COLLATE NOCASE = ?')
+          .get(gh.username, primaryRepo);
+        const nextIndex = (existing?.maxIdx ?? 0) + 1;
+        db.prepare('INSERT OR IGNORE INTO repo_groups (username, primaryRepo, linkedRepo, orderIndex) VALUES (?, ?, ?, ?)')
+          .run(gh.username, primaryRepo, r.name, nextIndex);
+        trackedOverflows.add(r.name.toLowerCase());
+      }
+    }
+
+    // Hide overflow repos from dashboard
+    const visible = allRepos.filter((r) => !trackedOverflows.has(r.name.toLowerCase()));
     res.json(visible);
   } catch (err) {
     console.error('Failed to fetch repos:', err.message);
