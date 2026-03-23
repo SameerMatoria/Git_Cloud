@@ -212,11 +212,15 @@ app.get('/api/repos', auth.protect(), async (req, res) => {
       if (repoRes.data.length < 100) break;
       page++;
     }
-    // Hide overflow repos from dashboard (they're internal) — case-insensitive
+    // Hide overflow repos from dashboard — by DB entry OR by description pattern
     const overflowRepos = new Set(
       db.prepare('SELECT linkedRepo FROM repo_groups WHERE username = ?').all(gh.username).map((r) => r.linkedRepo.toLowerCase())
     );
-    const visible = allRepos.filter((r) => !overflowRepos.has(r.name.toLowerCase()));
+    const visible = allRepos.filter((r) => {
+      if (overflowRepos.has(r.name.toLowerCase())) return false;
+      if (r.description && r.description.match(/^Overflow storage for .+ \(auto-created by GitCloud\)$/i)) return false;
+      return true;
+    });
     res.json(visible);
   } catch (err) {
     console.error('Failed to fetch repos:', err.message);
