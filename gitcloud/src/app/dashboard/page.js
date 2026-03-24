@@ -179,9 +179,9 @@ export default function DashboardPage() {
     fetchUserAndRepos();
   }, []);
 
-  // Fetch actual file sizes when storage tab is opened
+  // Fetch actual file sizes (including overflow repos) when repos load
   useEffect(() => {
-    if (activeTab !== 'storage' || repos.length === 0) return;
+    if (repos.length === 0) return;
     setSizesLoading(true);
     Promise.all(
       repos.map((repo) =>
@@ -195,7 +195,7 @@ export default function DashboardPage() {
       setRepoSizes(sizes);
       setSizesLoading(false);
     });
-  }, [activeTab, repos]);
+  }, [repos]);
 
   // Drag and drop handlers
   const handleDragOver = (e) => { e.preventDefault(); setIsDragging(true); };
@@ -586,8 +586,8 @@ export default function DashboardPage() {
                               {repo.stargazers_count}
                             </span>
                           )}
-                          {repo.size > 0 && (
-                            <span>{formatBytes(repo.size * 1024)}</span>
+                          {(repoSizes[repo.name] || repo.size > 0) && (
+                            <span>{formatBytes(repoSizes[repo.name] ?? repo.size * 1024)}</span>
                           )}
                           <span className="ml-auto">{formatDate(repo.updated_at)}</span>
                         </div>

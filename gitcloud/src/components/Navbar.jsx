@@ -20,6 +20,16 @@ export default function Navbar({ user }) {
 
         {/* Right side */}
         <div className="flex items-center gap-3">
+          {/* Info tooltip */}
+          <div className="relative group/info">
+            <button className="w-7 h-7 flex items-center justify-center rounded-full border border-white/10 text-zinc-500 hover:text-white hover:border-white/20 transition-all text-xs font-bold">
+              i
+            </button>
+            <div className="pointer-events-none opacity-0 group-hover/info:opacity-100 transition-opacity duration-200 absolute right-0 top-full mt-2 w-72 p-3.5 rounded-xl bg-zinc-900 border border-white/10 shadow-xl shadow-black/40 text-xs text-zinc-300 leading-relaxed z-50">
+              <p className="font-semibold text-white mb-1.5">Storage tip</p>
+              <p>Create new folders (repos) for large files instead of adding to ones that are already full. This avoids automatic overflow and keeps your storage organized.</p>
+            </div>
+          </div>
           {user && (
             <button
               onClick={() => router.push('/dashboard')}
