@@ -31,7 +31,7 @@ const features = [
   },
   {
     title: 'Drag & Drop Upload',
-    desc: 'Upload files with drag-and-drop or click-to-browse. Auto-committed to GitHub with zero config. Supports up to 25 MB per file.',
+    desc: 'Upload files with drag-and-drop or click-to-browse. Auto-committed to GitHub with zero config. Large files are auto-chunked — no size limit.',
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
@@ -182,7 +182,7 @@ export default function HomePage() {
           {/* Stats */}
           <div className="flex items-center justify-center gap-8 sm:gap-12 mt-16 animate-fade-in" style={{ animationDelay: '500ms' }}>
             {[
-              { val: '25 MB', label: 'per file' },
+              { val: 'No Limit', label: 'per file' },
               { val: '100 TB', label: 'theoretical max' },
               { val: 'Free', label: 'forever' },
             ].map((s) => (
