@@ -182,7 +182,7 @@ export default function HomePage() {
           {/* Stats */}
           <div className="flex items-center justify-center gap-8 sm:gap-12 mt-16 animate-fade-in" style={{ animationDelay: '500ms' }}>
             {[
-              { val: 'No Limit', label: 'per file' },
+              { val: 'GB+', label: 'upload per file' },
               { val: '100 TB', label: 'theoretical max' },
               { val: 'Free', label: 'forever' },
             ].map((s) => (
