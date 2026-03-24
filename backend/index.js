@@ -5,6 +5,7 @@ import multer from 'multer';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
 import { AuthSnap } from 'auth-snap';
 import db from './db.js';
 
@@ -28,16 +29,60 @@ const upload = multer({ limits: { fileSize: MAX_FILE_SIZE } });
 const PORT = process.env.PORT || 5000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://gitcloud-r.onrender.com';
 
-// Persistent GitHub OAuth token storage via SQLite
+// ── Security: Input validation helpers ─────────────────────────
+const SAFE_REPO_NAME = /^[a-zA-Z0-9._-]+$/;
+const validateRepoName = (name) => SAFE_REPO_NAME.test(name) && name.length <= 100 && !name.includes('..');
+const sanitizePath = (p) => {
+  if (!p) return '';
+  // Reject null bytes, absolute paths, and path traversal
+  if (p.includes('\0') || p.startsWith('/') || p.startsWith('\\')) return null;
+  // Normalize and reject any .. segments
+  const parts = p.split('/').filter(Boolean);
+  if (parts.some((seg) => seg === '..' || seg === '.')) return null;
+  return parts.join('/');
+};
+const sanitizeFilename = (name) => {
+  if (!name) return 'download';
+  // Remove characters dangerous in Content-Disposition headers
+  return name.replace(/["\r\n\0\\]/g, '_');
+};
+
+// ── Security: Token encryption at rest ─────────────────────────
+const ENCRYPTION_KEY = crypto.scryptSync(process.env.SESSION_SECRET, 'gitcloud-salt', 32);
+const IV_LENGTH = 16;
+const encryptToken = (token) => {
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+  let encrypted = cipher.update(token, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return iv.toString('hex') + ':' + encrypted;
+};
+const decryptToken = (encrypted) => {
+  try {
+    const [ivHex, data] = encrypted.split(':');
+    if (!ivHex || !data) return encrypted; // Fallback: unencrypted legacy token
+    const iv = Buffer.from(ivHex, 'hex');
+    if (iv.length !== IV_LENGTH) return encrypted; // Legacy unencrypted token
+    const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+    let decrypted = decipher.update(data, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch {
+    return encrypted; // Fallback: assume plain text (legacy)
+  }
+};
+
+// Persistent GitHub OAuth token storage via SQLite (encrypted at rest)
 const githubUsers = {
   set(userId, data) {
     db.prepare(
       'INSERT OR REPLACE INTO github_tokens (userId, token, username, updatedAt) VALUES (?, ?, ?, datetime(\'now\'))'
-    ).run(userId, data.token, data.username);
+    ).run(userId, encryptToken(data.token), data.username);
   },
   get(userId) {
     const row = db.prepare('SELECT token, username FROM github_tokens WHERE userId = ?').get(userId);
-    return row || null;
+    if (!row) return null;
+    return { token: decryptToken(row.token), username: row.username };
   },
   delete(userId) {
     db.prepare('DELETE FROM github_tokens WHERE userId = ?').run(userId);
@@ -45,7 +90,8 @@ const githubUsers = {
   // Find token by GitHub username (for shared file downloads)
   findByUsername(username) {
     const row = db.prepare('SELECT token, username FROM github_tokens WHERE username = ?').get(username);
-    return row || null;
+    if (!row) return null;
+    return { token: decryptToken(row.token), username: row.username };
   },
 };
 
@@ -87,7 +133,11 @@ app.use(cors({
   origin: FRONTEND_URL,
   credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
+app.use(helmet({
+  contentSecurityPolicy: false, // Handled by Next.js frontend
+  crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allow cross-origin file previews
+}));
 
 // Rate limiting
 const apiLimiter = rateLimit({
@@ -117,6 +167,23 @@ const authLimiter = rateLimit({
 app.use('/api/', apiLimiter);
 app.use('/api/upload', uploadLimiter);
 app.use('/auth/', authLimiter);
+
+// Security: validate repo names and sanitize paths on all API requests
+app.use('/api/', (req, res, next) => {
+  const params = { ...req.query, ...req.body };
+  // Validate repo name if present
+  if (params.repo && !validateRepoName(params.repo)) {
+    return res.status(400).json({ error: 'Invalid repository name' });
+  }
+  // Sanitize path-like params
+  for (const key of ['path', 'filePath', 'oldPath', 'newPath', 'manifestPath', 'folderName']) {
+    const val = params[key];
+    if (val && typeof val === 'string' && sanitizePath(val) === null) {
+      return res.status(400).json({ error: `Invalid ${key}: path traversal not allowed` });
+    }
+  }
+  next();
+});
 
 // Allow auth via Authorization header (for direct backend calls that bypass the Next.js proxy)
 // Converts "Authorization: Bearer <jwt>" into the cookie header so AuthSnap picks it up
@@ -280,6 +347,7 @@ app.delete('/api/repos', auth.protect(), async (req, res) => {
 
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Repository name is required' });
+  if (!validateRepoName(name)) return res.status(400).json({ error: 'Invalid repository name' });
 
   try {
     await axios.delete(`https://api.github.com/repos/${gh.username}/${name}`, {
@@ -556,7 +624,7 @@ app.get('/api/download-chunked', auth.protect(), async (req, res) => {
 
     const dir = manifestPath.includes('/') ? manifestPath.substring(0, manifestPath.lastIndexOf('/')) : '';
 
-    res.set('Content-Disposition', `attachment; filename="${manifest.originalName}"`);
+    res.set('Content-Disposition', `attachment; filename="${sanitizeFilename(manifest.originalName)}"`);;
     res.set('Content-Type', 'application/octet-stream');
     res.set('Content-Length', manifest.totalSize);
 
@@ -730,7 +798,7 @@ app.get('/api/download', auth.protect(), async (req, res) => {
         responseType: 'arraybuffer',
         headers: { Authorization: `Bearer ${gh.token}` },
       });
-      res.set('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.set('Content-Disposition', `attachment; filename="${sanitizeFilename(fileName)}"`);;
       res.set('Content-Type', 'application/octet-stream');
       res.send(response.data);
     } else {
@@ -741,17 +809,13 @@ app.get('/api/download', auth.protect(), async (req, res) => {
         { headers: { ...headers, Accept: 'application/vnd.github.v3+json' } }
       );
       const buffer = Buffer.from(blobRes.data.content, 'base64');
-      res.set('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.set('Content-Disposition', `attachment; filename="${sanitizeFilename(fileName)}"`);;
       res.set('Content-Type', 'application/octet-stream');
       res.send(buffer);
     }
   } catch (err) {
     console.error('Download error:', err.response?.status, err.response?.data || err.message);
-    res.status(err.response?.status || 500).json({
-      error: 'Download failed',
-      details: err.response?.data?.message || err.message,
-      url: `https://api.github.com/repos/${gh.username}/${repoName}/contents/${filePath}`,
-    });
+    res.status(err.response?.status || 500).json({ error: 'Download failed' });
   }
 });
 
@@ -779,7 +843,7 @@ app.get('/api/preview', auth.protect(), async (req, res) => {
     const mimeTypes = {
       pdf: 'application/pdf',
       txt: 'text/plain',
-      html: 'text/html',
+      html: 'text/plain', // Serve HTML as plain text to prevent XSS
       json: 'application/json',
       xml: 'application/xml',
     };
@@ -787,7 +851,8 @@ app.get('/api/preview', auth.protect(), async (req, res) => {
     const fileName = filePath.split('/').pop();
 
     res.set('Content-Type', contentType);
-    res.set('Content-Disposition', `inline; filename="${fileName}"`);
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('Content-Disposition', `inline; filename="${sanitizeFilename(fileName)}"`);
     res.send(response.data);
   } catch (err) {
     console.error('Preview error:', err.response?.data?.toString() || err.message);
@@ -970,10 +1035,10 @@ app.get('/api/contents', auth.protect(), async (req, res) => {
 function getMimeType(fileName) {
   const ext = fileName.split('.').pop().toLowerCase();
   const types = {
-    pdf: 'application/pdf', txt: 'text/plain', html: 'text/html',
+    pdf: 'application/pdf', txt: 'text/plain', html: 'text/plain',
     json: 'application/json', xml: 'application/xml',
     jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
-    gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp',
+    gif: 'image/gif', webp: 'image/webp', svg: 'image/png', bmp: 'image/bmp', // SVG served as png to prevent XSS
     mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', m4a: 'audio/mp4', flac: 'audio/flac',
     mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
   };
@@ -1064,7 +1129,7 @@ app.get('/api/share/:id/download', async (req, res) => {
         }
       );
       res.set('Content-Type', contentType);
-      res.set('Content-Disposition', `inline; filename="${fileName}"`);
+      res.set('Content-Disposition', `inline; filename="${sanitizeFilename(fileName)}"`);;
       return res.send(response.data);
     } catch (err) {
       console.error('Share download (token) error:', err.response?.data?.toString() || err.message);
@@ -1076,7 +1141,7 @@ app.get('/api/share/:id/download', async (req, res) => {
     const rawUrl = `https://raw.githubusercontent.com/${share.username}/${share.repo}/HEAD/${share.filePath}`;
     const response = await axios.get(rawUrl, { responseType: 'arraybuffer' });
     res.set('Content-Type', contentType);
-    res.set('Content-Disposition', `inline; filename="${fileName}"`);
+    res.set('Content-Disposition', `inline; filename="${sanitizeFilename(fileName)}"`);;
     res.send(response.data);
   } catch {
     res.status(503).json({ error: 'File owner is not currently logged in and the repo may be private.' });

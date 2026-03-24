@@ -219,8 +219,8 @@ export default function RepoPage() {
     const fetchData = async () => {
       try {
         const [contentsRes, branchRes] = await Promise.all([
-          api.get(`/api/contents?repo=${repo}&path=${path}`),
-          api.get(`/api/default-branch?repo=${repo}`),
+          api.get(`/api/contents?repo=${encodeURIComponent(repo)}&path=${encodeURIComponent(path)}`),
+          api.get(`/api/default-branch?repo=${encodeURIComponent(repo)}`),
         ]);
         setContents(Array.isArray(contentsRes.data) ? contentsRes.data : []);
         setDefaultBranch(branchRes.data.default_branch);
@@ -296,7 +296,7 @@ export default function RepoPage() {
             setDeleteProgress({ status: 'error', currentFile: '', completedCount: 0, totalCount: 1, failedCount: 1 });
           }
         }
-        const updated = await api.get(`/api/contents?repo=${repo}&path=${path}`);
+        const updated = await api.get(`/api/contents?repo=${encodeURIComponent(repo)}&path=${encodeURIComponent(path)}`);
         setContents(Array.isArray(updated.data) ? updated.data : []);
       }
     );
@@ -353,7 +353,7 @@ export default function RepoPage() {
 
         setSelectedFiles(new Set());
         try {
-          const updated = await api.get(`/api/contents?repo=${repo}&path=${path}`);
+          const updated = await api.get(`/api/contents?repo=${encodeURIComponent(repo)}&path=${encodeURIComponent(path)}`);
           setContents(Array.isArray(updated.data) ? updated.data : []);
         } catch {}
       },
@@ -372,7 +372,7 @@ export default function RepoPage() {
     setCreatingFolder(true);
     try {
       await api.post('/api/create-folder', { repo, path, folderName: name });
-      const updated = await api.get(`/api/contents?repo=${repo}&path=${path}`);
+      const updated = await api.get(`/api/contents?repo=${encodeURIComponent(repo)}&path=${encodeURIComponent(path)}`);
       setContents(Array.isArray(updated.data) ? updated.data : []);
       setNewFolderName(null);
       showToast(`Folder "${name}" created!`, 'success');
@@ -392,7 +392,7 @@ export default function RepoPage() {
         try {
           await api.delete('/api/delete-folder', { data: { repo: folder._sourceRepo || repo, path: folder.path } });
           showToast(`Folder "${folder.name}" deleted!`, 'success');
-          const updated = await api.get(`/api/contents?repo=${repo}&path=${path}`);
+          const updated = await api.get(`/api/contents?repo=${encodeURIComponent(repo)}&path=${encodeURIComponent(path)}`);
           setContents(Array.isArray(updated.data) ? updated.data : []);
         } catch (err) {
           showToast(`Failed to delete folder: ${err.response?.data?.error || err.message}`, 'error');
@@ -423,7 +423,7 @@ export default function RepoPage() {
       } else if (file.download_url) {
         res = await axios.get(file.download_url, { responseType: 'blob', onDownloadProgress });
       } else {
-        res = await api.get(`/api/download?repo=${repo}&path=${file.path}`, { responseType: 'blob', onDownloadProgress });
+        res = await api.get(`/api/download?repo=${encodeURIComponent(repo)}&path=${encodeURIComponent(file.path)}`, { responseType: 'blob', onDownloadProgress });
       }
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement('a');
@@ -458,7 +458,7 @@ export default function RepoPage() {
       await api.put('/api/rename-file', { repo: renamingFile._sourceRepo || repo, oldPath, newPath });
       showToast(`Renamed to "${newFileName.trim()}"`, 'success');
       setRenamingFile(null);
-      const updated = await api.get(`/api/contents?repo=${repo}&path=${path}`);
+      const updated = await api.get(`/api/contents?repo=${encodeURIComponent(repo)}&path=${encodeURIComponent(path)}`);
       setContents(Array.isArray(updated.data) ? updated.data : []);
     } catch (err) {
       showToast(err.response?.data?.error || 'Rename failed', 'error');
@@ -579,7 +579,7 @@ export default function RepoPage() {
 
     // Refresh contents
     try {
-      const updated = await api.get(`/api/contents?repo=${repo}&path=${path}`);
+      const updated = await api.get(`/api/contents?repo=${encodeURIComponent(repo)}&path=${encodeURIComponent(path)}`);
       setContents(Array.isArray(updated.data) ? updated.data : []);
     } catch {}
 
