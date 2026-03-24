@@ -13,7 +13,7 @@ GitCloud does not have its own storage. Every file you upload is stored in your 
     title: 'How Authentication Works',
     content: `GitCloud uses GitHub OAuth for sign-in. When you click "Continue with GitHub", you are redirected to GitHub's own login page. GitCloud never sees, handles, or stores your GitHub password.
 
-After you authorize, GitHub provides GitCloud with an access token scoped to the permissions you granted. This token is stored only in your server-side session and is never exposed to the browser or saved to any database.`,
+After you authorize, GitHub provides GitCloud with an access token scoped to the permissions you granted. This token is **encrypted at rest** (AES-256) and stored in a server-side SQLite database so your session persists across server restarts. The token is never exposed to the browser in plain text.`,
   },
   {
     id: 'permissions',
@@ -23,6 +23,11 @@ After you authorize, GitHub provides GitCloud with an access token scoped to the
         scope: 'repo',
         label: 'Repository access (read & write)',
         reason: 'Required to list your repositories, read file contents, upload new files, create folders, rename and delete files. This is the core functionality of GitCloud.',
+      },
+      {
+        scope: 'delete_repo',
+        label: 'Delete repositories',
+        reason: 'Required to delete repositories you no longer need, directly from the GitCloud dashboard.',
       },
       {
         scope: 'user:email',
@@ -37,10 +42,12 @@ After you authorize, GitHub provides GitCloud with an access token scoped to the
     list: [
       'Lists your repositories and their contents via the GitHub API',
       'Uploads files by creating commits in your repositories',
+      'Splits large files (over 20 MB) into chunks and stores a manifest file for reassembly on download',
+      'Auto-creates overflow repositories when a repo nears its storage limit (these are hidden from your dashboard but visible on GitHub)',
       'Creates folders using a .gitkeep placeholder file',
       'Previews images, audio, video, code, and markdown files',
       'Generates shareable public links for individual files',
-      'Displays storage usage statistics from GitHub\'s reported repo sizes',
+      'Displays storage usage statistics calculated from actual file sizes across all linked repos',
     ],
   },
   {
@@ -59,13 +66,15 @@ After you authorize, GitHub provides GitCloud with an access token scoped to the
   {
     id: 'data-storage',
     title: 'Data We Store',
-    content: `GitCloud stores minimal data:
+    content: `GitCloud stores minimal data in a server-side SQLite database:
 
-**Server session** — Your GitHub access token is kept in a server-side session for the duration of your login. It is deleted when you log out or the session expires.
+**Encrypted access token** — Your GitHub OAuth token is encrypted with AES-256 and stored so your session persists across server restarts. It is deleted when you log out.
 
-**Share links** — When you create a shareable link, we store a record in a local SQLite database containing: the share ID, your username, repository name, file path, and creation date. No file content is stored — the file is fetched from GitHub when someone opens the link.
+**Share links** — When you create a shareable link, we store a record containing: the share ID, your username, repository name, file path, and creation date. No file content is stored — the file is fetched from GitHub when someone opens the link.
 
-**That's it.** We do not maintain user accounts, profiles, usage logs, or any other persistent data about you.`,
+**Repo group mappings** — When GitCloud auto-creates overflow repositories, we store a mapping between the primary repo and its overflow repos so they can be managed as one unit.
+
+**We do not** maintain user profiles, usage logs, browsing history, or any analytics data about you.`,
   },
   {
     id: 'revoke',
@@ -77,6 +86,19 @@ After you authorize, GitHub provides GitCloud with an access token scoped to the
 3. Click **Revoke**
 
 Once revoked, GitCloud can no longer access any of your repositories. Any active sessions will stop working immediately.`,
+  },
+  {
+    id: 'security',
+    title: 'Security Measures',
+    list: [
+      'GitHub tokens are encrypted at rest using AES-256-CBC',
+      'All API inputs are validated — repository names, file paths, and folder names are checked for path traversal and injection attacks',
+      'Rate limiting is enforced on all API endpoints (300 req/15min), uploads (60/15min), and auth (20/15min)',
+      'Security headers are set via Helmet: HSTS, X-Frame-Options (DENY), X-Content-Type-Options, Referrer-Policy, and Permissions-Policy',
+      'File previews serve HTML and SVG as plain text to prevent cross-site scripting (XSS)',
+      'CORS is restricted to the GitCloud frontend domain only',
+      'All traffic is served over HTTPS',
+    ],
   },
   {
     id: 'open-source',
