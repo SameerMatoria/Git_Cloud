@@ -168,7 +168,7 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:5000
 | Per file (hard limit) | 100 MB |
 | Per repo (recommended) | 1 GB |
 | Per account | No total cap, up to 100K repos |
-| Theoretical max | ~100 TB |
+| Theoretical max | 100+ GB |
 
 ---
 
