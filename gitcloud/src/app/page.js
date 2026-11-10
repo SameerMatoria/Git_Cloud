@@ -183,7 +183,7 @@ export default function HomePage() {
           <div className="flex items-center justify-center gap-8 sm:gap-12 mt-16 animate-fade-in" style={{ animationDelay: '500ms' }}>
             {[
               { val: 'GB+', label: 'upload per file' },
-              { val: '100 TB', label: 'theoretical max' },
+              { val: '100+ GB', label: 'theoretical max' },
               { val: 'Free', label: 'forever' },
             ].map((s) => (
               <div key={s.label} className="text-center">
